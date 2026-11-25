@@ -1,0 +1,2015 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>農業ダービー | 競馬風 農業クイズアプリ</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Tone.js (効果音生成用) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f0fdf4;
+        }
+        .font-keiba {
+            font-family: 'Dela Gothic One', cursive, sans-serif;
+            letter-spacing: 0.04em;
+        }
+        /* 枠番カラー */
+        .waku-1 { background-color: #ffffff; color: #111827; border: 2px solid #9ca3af; }
+        .waku-2 { background-color: #1f2937; color: #ffffff; border: 2px solid #000000; }
+        .waku-3 { background-color: #dc2626; color: #ffffff; border: 2px solid #991b1b; }
+        .waku-4 { background-color: #2563eb; color: #ffffff; border: 2px solid #1e40af; }
+
+        /* 芝コースのストライプ模様 */
+        .turf-track {
+            background: repeating-linear-gradient(
+                90deg,
+                #15803d,
+                #15803d 30px,
+                #16a34a 30px,
+                #16a34a 60px
+            );
+        }
+
+        /* 馬のギャロップ上下揺れアニメーション */
+        @keyframes gallop {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-4px) rotate(-3deg); }
+        }
+        .animate-gallop {
+            animation: gallop 0.25s infinite ease-in-out;
+        }
+
+        /* 優勝時の紙吹雪アニメーション */
+        @keyframes confettiFall {
+            0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+        }
+        .confetti {
+            position: fixed;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            z-index: 9999;
+            pointer-events: none;
+            animation: confettiFall linear forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-gray-800 select-none">
+
+    <!-- トースト通知ボックス（alertの代替） -->
+    <div id="toast-box" class="hidden fixed bottom-5 right-5 z-50 bg-gray-900 text-white border-2 border-yellow-400 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-2 text-sm font-bold">
+        <i class="fa-solid fa-bell text-yellow-400"></i>
+        <span id="toast-message">通知メッセージ</span>
+    </div>
+
+    <!-- ヘッダーナビゲーション -->
+    <header class="bg-gradient-to-r from-green-950 via-green-900 to-green-950 text-white shadow-lg border-b-4 border-yellow-500">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center space-x-2.5 cursor-pointer" onclick="returnHome()">
+                <div class="bg-yellow-400 text-green-950 w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow">
+                    🐎
+                </div>
+                <div>
+                    <h1 class="font-keiba text-lg sm:text-xl text-yellow-300 leading-tight">農業ダービー</h1>
+                    <p class="text-[10px] sm:text-xs text-green-200">AGRI-KEIBA QUIZ DERBY</p>
+                </div>
+            </div>
+
+            <!-- Googleログイン / プロフィール表示 -->
+            <div class="flex items-center space-x-2">
+                <button id="login-btn" class="bg-white hover:bg-gray-100 text-gray-800 font-bold text-xs sm:text-sm px-3.5 py-2 rounded-lg shadow flex items-center space-x-2 transition">
+                    <i class="fa-brands fa-google text-red-500"></i>
+                    <span>Googleでログイン</span>
+                </button>
+
+                <div id="user-profile" class="hidden flex items-center space-x-2 bg-green-800/80 border border-green-600 px-3 py-1.5 rounded-lg">
+                    <img id="user-avatar" src="https://placehold.co/40x40/16a34a/ffffff?text=J" alt="Avatar" class="w-7 h-7 rounded-full border border-yellow-400">
+                    <span id="user-name" class="text-xs font-bold text-white max-w-[100px] truncate">騎手</span>
+                    <button id="logout-btn" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded transition">
+                        ログアウト
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-grow max-w-5xl w-full mx-auto px-4 py-6">
+
+        <!-- 1. ホーム画面（パドック・レース選択） -->
+        <section id="home-screen" class="space-y-6">
+            <!-- 騎手戦績ボード -->
+            <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-md border-2 border-green-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="bg-green-800 text-yellow-300 font-keiba text-xs px-2.5 py-0.5 rounded">JOCKEY STATS</span>
+                        <span id="cloud-status" class="text-xs text-gray-500">※Googleログインで戦績をクラウド保存</span>
+                    </div>
+                    <h2 class="font-bold text-base sm:text-lg text-gray-900 mt-1">あなたの通算レース成績</h2>
+                </div>
+                <div class="flex items-center space-x-4 sm:space-x-6 bg-green-50 px-5 py-2.5 rounded-xl border border-green-200">
+                    <div class="text-center">
+                        <div class="text-[11px] text-gray-500 font-bold">出走数</div>
+                        <div id="stat-races" class="font-keiba text-lg sm:text-xl text-gray-800">0戦</div>
+                    </div>
+                    <div class="h-8 w-px bg-green-200"></div>
+                    <div class="text-center">
+                        <div class="text-[11px] text-gray-500 font-bold">1着優勝</div>
+                        <div id="stat-wins" class="font-keiba text-lg sm:text-xl text-red-600">0勝</div>
+                    </div>
+                    <div class="h-8 w-px bg-green-200"></div>
+                    <div class="text-center">
+                        <div class="text-[11px] text-gray-500 font-bold">G1制覇</div>
+                        <div id="stat-g1" class="font-keiba text-lg sm:text-xl text-amber-600">0回</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ステップアップ出走バナー（OP → G1制覇モード） -->
+            <div class="bg-gradient-to-r from-green-900 via-emerald-800 to-green-900 rounded-2xl p-5 sm:p-6 text-white shadow-xl border-2 border-yellow-400 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="space-y-1 text-center md:text-left">
+                    <span class="inline-block bg-yellow-400 text-green-950 font-keiba text-xs px-3 py-0.5 rounded-full">STEP-UP CHALLENGE</span>
+                    <h2 class="font-keiba text-xl sm:text-2xl text-white">OPから勝ち上がり！G1完全制覇モード</h2>
+                    <p class="text-xs sm:text-sm text-green-100">
+                        簡単な「OP（オープン）」からスタートし、1着を重ねて最高峰の「G1（春・夏・秋・冬・海外）」制覇を目指そう！
+                    </p>
+                </div>
+                <button onclick="startCareerMode()" class="bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-green-950 font-keiba text-base sm:text-lg px-6 py-3.5 rounded-xl shadow-lg transition transform hover:-translate-y-0.5 active:scale-95 shrink-0">
+                    🐎 出走登録する！
+                </button>
+            </div>
+
+            <!-- クラス別単発レース選択グリッド -->
+            <div>
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-keiba text-base sm:text-lg text-green-950 flex items-center">
+                        <i class="fa-solid fa-flag-checkered text-green-700 mr-2"></i> レースを選んで単発出走
+                    </h3>
+                    <span class="text-xs text-gray-500">4択・〇×・筆記で完全制覇を目指せ！</span>
+                </div>
+                <div id="class-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    <!-- JSで動的にカードを生成 -->
+                </div>
+            </div>
+
+            <!-- 世界農業知識記念 クリアタイムランキング（ホーム画面の一番下） -->
+            <div class="bg-white rounded-2xl p-4 sm:p-5 shadow-md border-2 border-purple-700">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3 border-b border-purple-100 pb-2">
+                    <div class="flex items-center space-x-2">
+                        <span class="bg-purple-800 text-yellow-300 font-keiba text-xs px-2.5 py-1 rounded">WORLD G1 RANKING</span>
+                        <h3 class="font-keiba text-base sm:text-lg text-purple-950">🌍 世界農業知識記念 クリアタイムランキング</h3>
+                    </div>
+                    <span class="text-xs text-gray-500">※Googleログイン＆全10問完全制覇で自動記録</span>
+                </div>
+                <div id="world-ranking-list" class="space-y-2 text-xs sm:text-sm">
+                    <div class="text-center text-gray-400 py-4">ランキングを読み込み中...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. レース画面（クイズ＆芝コースアニメーション） -->
+        <section id="race-screen" class="hidden bg-white rounded-2xl shadow-xl border-2 border-green-800 overflow-hidden relative">
+            <!-- レース情報ヘッダー -->
+            <div class="bg-green-950 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2 border-b-2 border-yellow-500">
+                <div class="flex items-center space-x-2.5">
+                    <span id="race-grade-badge" class="px-2.5 py-1 rounded font-keiba text-xs sm:text-sm shadow bg-gray-600 text-white">OP</span>
+                    <div>
+                        <h2 id="race-title" class="font-keiba text-base sm:text-lg text-yellow-300 leading-tight">オープン特別</h2>
+                        <p id="race-subtitle" class="text-xs text-green-200">第1コーナー（序盤戦） - 1 / 3 問目</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2 sm:space-x-3">
+                    <!-- 300秒制限タイマー表示（世界農業知識記念用） -->
+                    <div id="race-timer-box" class="hidden bg-red-900 border border-red-400 px-3 py-1 rounded-lg text-xs font-keiba text-yellow-300 animate-pulse">
+                        ⏱ 残り <span id="race-timer-text">300</span>秒
+                    </div>
+                    <div class="bg-green-900 border border-green-700 px-3 py-1 rounded-lg text-xs font-bold">
+                        戦績: <span id="race-score-display" class="text-yellow-300">0勝 0敗</span>
+                    </div>
+                    <button onclick="quitRace()" class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-2.5 py-1.5 rounded transition">
+                        棄権
+                    </button>
+                </div>
+            </div>
+
+            <!-- 芝コース・競馬レースアニメーションエリア -->
+            <div class="relative turf-track h-36 sm:h-40 border-b-4 border-amber-800 overflow-hidden px-2 py-2 flex flex-col justify-between">
+                <!-- 距離標識（ハロン棒風） -->
+                <div class="absolute top-1 left-4 text-[10px] font-bold text-white/70 bg-black/30 px-1.5 rounded">START</div>
+                <div class="absolute top-1 left-1/2 transform -translate-x-1/2 text-[10px] font-bold text-white/70 bg-black/30 px-1.5 rounded">残り400m</div>
+                <div class="absolute top-1 right-16 text-[10px] font-bold text-yellow-300 bg-black/50 px-1.5 rounded">残り200m</div>
+
+                <!-- ゴールライン（右端付近） -->
+                <div class="absolute top-0 bottom-0 right-[16%] w-1.5 bg-red-600 border-x border-white z-10 flex flex-col justify-between items-center py-1">
+                    <span class="bg-red-600 text-white text-[9px] font-keiba px-1 rounded shadow">GOAL</span>
+                </div>
+
+                <!-- 4頭の競走馬レーン -->
+                <div class="relative z-20 flex flex-col justify-around h-full py-1">
+                    <!-- 1番馬 -->
+                    <div class="relative h-6 flex items-center">
+                        <div id="runner-0" class="absolute left-2 flex items-center space-x-1">
+                            <span class="waku-1 text-[10px] font-bold w-4 h-4 rounded-sm flex items-center justify-center shadow">1</span>
+                            <span class="text-xl sm:text-2xl transform -scale-x-100 inline-block">🐎</span>
+                        </div>
+                    </div>
+                    <!-- 2番馬 -->
+                    <div class="relative h-6 flex items-center">
+                        <div id="runner-1" class="absolute left-2 flex items-center space-x-1">
+                            <span class="waku-2 text-[10px] font-bold w-4 h-4 rounded-sm flex items-center justify-center shadow">2</span>
+                            <span class="text-xl sm:text-2xl transform -scale-x-100 inline-block">🐎</span>
+                        </div>
+                    </div>
+                    <!-- 3番馬 -->
+                    <div class="relative h-6 flex items-center">
+                        <div id="runner-2" class="absolute left-2 flex items-center space-x-1">
+                            <span class="waku-3 text-[10px] font-bold w-4 h-4 rounded-sm flex items-center justify-center shadow">3</span>
+                            <span class="text-xl sm:text-2xl transform -scale-x-100 inline-block">🐎</span>
+                        </div>
+                    </div>
+                    <!-- 4番馬 -->
+                    <div class="relative h-6 flex items-center">
+                        <div id="runner-3" class="absolute left-2 flex items-center space-x-1">
+                            <span class="waku-4 text-[10px] font-bold w-4 h-4 rounded-sm flex items-center justify-center shadow">4</span>
+                            <span class="text-xl sm:text-2xl transform -scale-x-100 inline-block">🐎</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- レース実況テロップ（ハラハラ演出用） -->
+                <div id="live-commentary-bar" class="hidden absolute bottom-1.5 left-1/2 transform -translate-x-1/2 z-30 bg-black/85 text-yellow-300 border border-yellow-500 px-4 py-1 rounded-full text-xs sm:text-sm font-bold shadow-lg whitespace-nowrap animate-pulse">
+                    <i class="fa-solid fa-microphone-lines text-red-500 mr-1.5"></i><span id="live-commentary-text">各馬一斉にスタート！</span>
+                </div>
+            </div>
+
+            <!-- 問題文エリア -->
+            <div class="p-4 sm:p-6 bg-amber-50/50">
+                <div class="bg-white p-4 sm:p-5 rounded-xl shadow-sm border-2 border-green-700 mb-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div class="flex items-center space-x-2">
+                            <span class="bg-green-700 text-white text-xs font-bold px-2 py-0.5 rounded">問題</span>
+                            <span id="question-category" class="text-xs font-bold text-green-700">野菜・果物</span>
+                        </div>
+                        <span id="question-type-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                            4択レース
+                        </span>
+                    </div>
+                    <p id="question-text" class="text-base sm:text-lg font-bold text-gray-900 leading-relaxed">
+                        ここに農業に関する問題が表示されます。
+                    </p>
+                </div>
+
+                <!-- 回答選択エリア（4択・〇×・筆記に対応） -->
+                <p id="answer-instruction" class="text-xs font-bold text-gray-600 mb-2 flex items-center">
+                    <i class="fa-solid fa-horse-head text-green-700 mr-1.5"></i> 正解だと思う「馬（馬番）」をクリックして出走させよう！
+                </p>
+                
+                <!-- 4択・〇×用コンテナ -->
+                <div id="horse-choices" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <!-- JSで動的に生成 -->
+                </div>
+
+                <!-- 筆記問題用コンテナ -->
+                <div id="written-answer-box" class="hidden bg-white p-4 rounded-xl border-2 border-green-600 shadow-sm">
+                    <div class="flex items-center space-x-2 mb-3">
+                        <span class="waku-1 font-keiba text-xs px-2 py-1 rounded shadow">1番枠</span>
+                        <span class="text-xs font-bold text-green-800">あなたの愛馬に答えを託して出走！</span>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="written-input" placeholder="答えを入力してください（ひらがな・カタカナ・漢字OK）" class="flex-grow border-2 border-gray-300 focus:border-green-600 rounded-lg px-4 py-3 text-base font-bold outline-none">
+                        <button id="written-submit-btn" onclick="submitWrittenAnswer()" class="bg-gradient-to-r from-green-700 to-green-600 hover:from-green-600 hover:to-green-500 text-white font-keiba px-6 py-3 rounded-lg shadow-md transition transform active:scale-95 shrink-0">
+                            🐎 出走する！
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 1問ごとの結果・解説オーバーレイ（着順発表） -->
+            <div id="step-result-modal" class="hidden bg-gray-900/95 text-white p-5 sm:p-6 border-t-4 border-yellow-400">
+                <div class="flex flex-col sm:flex-row items-center gap-4">
+                    <!-- 着順バッジ -->
+                    <div id="rank-badge" class="w-20 h-20 rounded-full flex flex-col items-center justify-center font-keiba shadow-lg border-4 border-yellow-300 bg-red-600 text-white shrink-0">
+                        <span class="text-[10px] leading-none">着順</span>
+                        <span id="rank-number" class="text-2xl leading-tight">1位</span>
+                    </div>
+                    <!-- 解説テキスト -->
+                    <div class="flex-grow text-center sm:text-left">
+                        <h3 id="rank-title" class="font-keiba text-xl sm:text-2xl text-yellow-400 mb-1">🎉 1位（1着）ゴール！</h3>
+                        <p id="explanation-text" class="text-xs sm:text-sm text-gray-200 leading-relaxed">
+                            ここに解説が表示されます。
+                        </p>
+                    </div>
+                    <!-- 次へボタン -->
+                    <button id="next-question-btn" onclick="nextStep()" class="bg-yellow-400 hover:bg-yellow-300 text-green-950 font-keiba px-6 py-3.5 rounded-xl shadow-lg transition transform active:scale-95 shrink-0">
+                        次のコーナーへ <i class="fa-solid fa-forward ml-1"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. 最終結果画面（確定着順・表彰式） -->
+        <section id="final-result-screen" class="hidden bg-white rounded-2xl p-6 sm:p-8 shadow-xl border-4 border-yellow-500 text-center space-y-6">
+            <div>
+                <span id="final-grade-label" class="inline-block bg-green-900 text-yellow-300 font-keiba text-xs sm:text-sm px-3 py-1 rounded-full mb-2">
+                    OP オープン特別 結果
+                </span>
+                <div id="final-trophy" class="text-5xl sm:text-6xl my-2">🏆</div>
+                <h2 id="final-headline" class="font-keiba text-2xl sm:text-4xl text-red-600 mb-2">総合1位優勝！おめでとう！</h2>
+                <p id="final-subtext" class="text-sm sm:text-base text-gray-600 max-w-xl mx-auto">
+                    素晴らしい騎乗でした！
+                </p>
+            </div>
+
+            <!-- 掲示板風スコアボード -->
+            <div class="bg-gray-900 text-white max-w-md mx-auto rounded-2xl p-5 border-2 border-gray-700 shadow-inner">
+                <div class="text-xs text-yellow-400 font-keiba tracking-widest mb-3 border-b border-gray-700 pb-1">OFFICIAL RESULT / 確定掲示板</div>
+                <div class="flex justify-around items-center">
+                    <div>
+                        <div class="text-xs text-gray-400">最終着順</div>
+                        <div id="final-rank-display" class="font-keiba text-3xl text-red-500">1位</div>
+                    </div>
+                    <div class="h-10 w-px bg-gray-700"></div>
+                    <div>
+                        <div class="text-xs text-gray-400">正解数</div>
+                        <div id="final-score-display" class="font-keiba text-2xl text-white">3 / 3 問</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-center gap-3">
+                <button id="step-up-btn" onclick="proceedNextClass()" class="hidden bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-keiba px-6 py-3.5 rounded-xl shadow-lg transition transform hover:-translate-y-0.5">
+                    次のクラスへ昇格する！ <i class="fa-solid fa-angles-right ml-1"></i>
+                </button>
+                <button onclick="returnHome()" class="bg-green-800 hover:bg-green-700 text-white font-bold px-6 py-3.5 rounded-xl shadow transition">
+                    <i class="fa-solid fa-house mr-1"></i> パドック（ホーム）へ戻る
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- フッター -->
+    <footer class="bg-green-950 text-green-400 text-center py-3 text-xs border-t border-green-900">
+        <p>© 2026 農業ダービー (Agri-Keiba Quiz) - 楽しく学ぼう日本の農業！</p>
+    </footer>
+
+    <!-- Firebase SDK & アプリケーションロジック -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, increment, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ご提示いただいたFirebase設定
+        const firebaseConfig = {
+            apiKey: "AIzaSyAtBGbHN7tx2mXNOyLs_WMGiEas6vkSZzU",
+            authDomain: "kuizuapuri.firebaseapp.com",
+            projectId: "kuizuapuri",
+            storageBucket: "kuizuapuri.firebasestorage.app",
+            messagingSenderId: "10865660276",
+            appId: "1:10865660276:web:a66d35aaf4d75442d81c21",
+            measurementId: "G-JNBK7MMSS9"
+        };
+
+        // Firebase初期化
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        const appId = "kuizuapuri";
+        let currentUser = null;
+        window.perfectG1Status = {
+            g1_spring: false,
+            g1_summer: false,
+            g1_autumn: false,
+            g1_winter: false,
+            g1_dubai: false,
+            g1_hongkong: false,
+            g1_arc: false,
+            g1_world: false
+        };
+
+        // UI要素の取得
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userProfile = document.getElementById('user-profile');
+        const userAvatar = document.getElementById('user-avatar');
+        const userName = document.getElementById('user-name');
+        const cloudStatus = document.getElementById('cloud-status');
+
+        // トースト通知表示関数（alertの代わり）
+        window.showToast = function(msg) {
+            const toast = document.getElementById('toast-box');
+            if (!toast) return;
+            document.getElementById('toast-message').textContent = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3500);
+        };
+
+        // Googleログイン処理
+        if (loginBtn) {
+            loginBtn.addEventListener('click', async () => {
+                try {
+                    await signInWithPopup(auth, provider);
+                    showToast("Googleアカウントでログインしました！");
+                } catch (error) {
+                    console.error("Login Error:", error);
+                    showToast("ログインに失敗しました。GitHub Pages等の承認済みドメインか確認してください。");
+                }
+            });
+        }
+
+        // ログアウト処理
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    await signOut(auth);
+                    showToast("ログアウトしました");
+                } catch (error) {
+                    console.error("Logout Error:", error);
+                }
+            });
+        }
+
+        // 認証状態の監視
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user;
+            if (user) {
+                loginBtn.classList.add('hidden');
+                userProfile.classList.remove('hidden');
+                userName.textContent = user.displayName || "騎手";
+                userAvatar.src = user.photoURL || "https://placehold.co/40x40/16a34a/ffffff?text=J";
+                cloudStatus.textContent = "🟢 クラウド同期中（戦績・G1完全制覇記録を自動保存）";
+                cloudStatus.classList.add("text-green-700", "font-bold");
+                await loadUserStats(user.uid);
+                subscribeWorldRanking();
+            } else {
+                loginBtn.classList.remove('hidden');
+                userProfile.classList.add('hidden');
+                cloudStatus.textContent = "※Googleログインで戦績をクラウド保存";
+                cloudStatus.classList.remove("text-green-700", "font-bold");
+                window.perfectG1Status = { g1_spring: false, g1_summer: false, g1_autumn: false, g1_winter: false, g1_dubai: false, g1_hongkong: false, g1_arc: false, g1_world: false };
+                updateStatsUI({ races: 0, wins: 0, g1Wins: 0 });
+                if (typeof initHomeScreen === 'function') initHomeScreen();
+                subscribeWorldRanking();
+            }
+        });
+
+        // Firestoreからユーザー戦績を読み込む
+        async function loadUserStats(uid) {
+            if (!uid) return;
+            try {
+                const userDocRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'stats');
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.perfectG1) {
+                        window.perfectG1Status = { ...window.perfectG1Status, ...data.perfectG1 };
+                    }
+                    updateStatsUI(data);
+                    if (typeof initHomeScreen === 'function') initHomeScreen();
+                } else {
+                    const initialStats = { races: 0, wins: 0, g1Wins: 0, perfectG1: window.perfectG1Status };
+                    await setDoc(userDocRef, initialStats);
+                    updateStatsUI(initialStats);
+                }
+            } catch (e) {
+                console.error("Firestore Load Error:", e);
+            }
+        }
+
+        // 世界農業知識記念のクリアタイムランキング（公開データ）をリアルタイム購読
+        let unsubscribeRanking = null;
+        function subscribeWorldRanking() {
+            const listEl = document.getElementById('world-ranking-list');
+            if (!listEl) return;
+
+            if (unsubscribeRanking) {
+                unsubscribeRanking();
+                unsubscribeRanking = null;
+            }
+
+            const rankingColRef = collection(db, 'artifacts', appId, 'public', 'data', 'world_g1_leaderboard');
+            unsubscribeRanking = onSnapshot(rankingColRef, (snapshot) => {
+                const records = [];
+                snapshot.forEach((docSnap) => {
+                    const d = docSnap.data();
+                    if (typeof d.bestTime === 'number') {
+                        records.push({ uid: docSnap.id, ...d });
+                    }
+                });
+
+                // タイムが速い（秒数が小さい）順にソート
+                records.sort((a, b) => a.bestTime - b.bestTime);
+                const top10 = records.slice(0, 10);
+
+                if (top10.length === 0) {
+                    listEl.innerHTML = `<div class="text-center text-gray-500 py-4 bg-purple-50/50 rounded-xl border border-dashed border-purple-200">まだ完全制覇者はいません。最初の世界王者を目指そう！</div>`;
+                    return;
+                }
+
+                listEl.innerHTML = top10.map((rec, index) => {
+                    const rank = index + 1;
+                    let rankBadge = `<span class="w-7 h-7 rounded-full bg-gray-200 text-gray-700 font-keiba text-xs flex items-center justify-center shrink-0">${rank}位</span>`;
+                    let rowStyle = "bg-gray-50 border-gray-200";
+                    if (rank === 1) {
+                        rankBadge = `<span class="w-7 h-7 rounded-full bg-gradient-to-br from-yellow-300 to-amber-500 text-green-950 font-keiba text-xs flex items-center justify-center shadow shrink-0">1位</span>`;
+                        rowStyle = "bg-amber-50 border-amber-300 font-bold";
+                    } else if (rank === 2) {
+                        rankBadge = `<span class="w-7 h-7 rounded-full bg-gradient-to-br from-gray-200 to-gray-400 text-gray-900 font-keiba text-xs flex items-center justify-center shadow shrink-0">2位</span>`;
+                        rowStyle = "bg-slate-50 border-slate-300";
+                    } else if (rank === 3) {
+                        rankBadge = `<span class="w-7 h-7 rounded-full bg-gradient-to-br from-amber-600 to-orange-700 text-white font-keiba text-xs flex items-center justify-center shadow shrink-0">3位</span>`;
+                        rowStyle = "bg-orange-50/60 border-orange-200";
+                    }
+
+                    const isMe = (currentUser && rec.uid === currentUser.uid);
+                    const safeName = (rec.name || "名無しの騎手").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    const avatarUrl = rec.photoURL || "https://placehold.co/40x40/6b21a8/ffffff?text=J";
+
+                    return `
+                        <div class="flex items-center justify-between px-3 py-2 rounded-xl border ${rowStyle} ${isMe ? 'ring-2 ring-purple-500' : ''}">
+                            <div class="flex items-center space-x-2.5 min-w-0">
+                                ${rankBadge}
+                                <img src="${avatarUrl}" onerror="this.src='https://placehold.co/40x40/6b21a8/ffffff?text=J'" alt="icon" class="w-6 h-6 rounded-full border border-purple-300 shrink-0">
+                                <span class="truncate text-gray-900">${safeName}</span>
+                                ${isMe ? '<span class="bg-purple-700 text-white text-[10px] px-1.5 py-0.5 rounded shrink-0">あなた</span>' : ''}
+                            </div>
+                            <div class="font-keiba text-purple-900 text-sm sm:text-base shrink-0 ml-2">
+                                ⏱ ${rec.bestTime}秒
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }, (error) => {
+                if (error && error.code === 'permission-denied') {
+                    listEl.innerHTML = `
+                        <div class="text-center text-gray-600 py-4 px-3 bg-purple-50/60 rounded-xl border border-dashed border-purple-300 space-y-1">
+                            <div class="font-bold text-purple-900">🔒 ランキング表示にはFirestoreルールの設定が必要です</div>
+                            <div class="text-xs text-gray-500">Firebaseコンソールの Firestore Database ＞ ルール で読み書きを許可すると表示されます</div>
+                        </div>`;
+                } else {
+                    listEl.innerHTML = `<div class="text-center text-gray-400 py-3">ランキングを取得できませんでした</div>`;
+                }
+            });
+        }
+
+        // 世界農業知識記念のクリアタイムを保存（自己ベスト更新時のみ上書き）
+        window.saveWorldG1ClearTime = async function(clearSeconds) {
+            if (!currentUser) {
+                showToast("※Googleログインすると世界ランキングにタイムが記録されます！");
+                return;
+            }
+            try {
+                const rankDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'world_g1_leaderboard', currentUser.uid);
+                const snap = await getDoc(rankDocRef);
+                let prevBest = null;
+                if (snap.exists() && typeof snap.data().bestTime === 'number') {
+                    prevBest = snap.data().bestTime;
+                }
+
+                if (prevBest === null || clearSeconds < prevBest) {
+                    await setDoc(rankDocRef, {
+                        name: currentUser.displayName || "騎手",
+                        photoURL: currentUser.photoURL || "",
+                        bestTime: clearSeconds,
+                        updatedAt: new Date().toISOString()
+                    }, { merge: true });
+                    showToast(`🏆 世界農業知識記念 自己ベスト更新（${clearSeconds}秒）！ランキングに登録しました！`);
+                } else {
+                    showToast(`クリアタイム：${clearSeconds}秒（自己ベスト：${prevBest}秒）`);
+                }
+            } catch (e) {
+                console.error("Save World Time Error:", e);
+            }
+        };
+
+        // 初期起動時にランキング購読開始
+        subscribeWorldRanking();
+
+        // Firestoreにレース結果を保存する
+        window.saveRaceResultToFirebase = async function(isFirstPlace, isG1Win, perfectG1Id) {
+            if (perfectG1Id && window.perfectG1Status.hasOwnProperty(perfectG1Id)) {
+                window.perfectG1Status[perfectG1Id] = true;
+            }
+            if (!currentUser) return;
+            try {
+                const userDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'stats');
+                await setDoc(userDocRef, {
+                    races: increment(1),
+                    wins: increment(isFirstPlace ? 1 : 0),
+                    g1Wins: increment(isG1Win ? 1 : 0),
+                    perfectG1: window.perfectG1Status
+                }, { merge: true });
+                await loadUserStats(currentUser.uid);
+            } catch (e) {
+                console.error("Firestore Save Error:", e);
+            }
+        };
+
+        function updateStatsUI(data) {
+            const racesEl = document.getElementById('stat-races');
+            const winsEl = document.getElementById('stat-wins');
+            const g1El = document.getElementById('stat-g1');
+            if (racesEl) racesEl.textContent = `${data.races || 0}戦`;
+            if (winsEl) winsEl.textContent = `${data.wins || 0}勝`;
+            if (g1El) g1El.textContent = `${data.g1Wins || 0}回`;
+        }
+    </script>
+
+    <!-- クイズデータと競馬ゲーム進行ロジック -->
+    <script>
+        // クラス定義（G3→農業記念、G2→農林水産賞、4大G1完全制覇でG1農業凱旋門賞解放）
+        const RACE_CLASSES = [
+            {
+                id: 'op',
+                grade: 'OP',
+                name: 'オープン特別',
+                desc: '最初の簡単な問題（入門レベル）',
+                badgeColor: 'bg-gray-600 text-white',
+                borderColor: 'border-gray-400',
+                icon: '🌱'
+            },
+            {
+                id: '1win',
+                grade: '1勝クラス',
+                name: '1勝クラス特別',
+                desc: '2回目の簡単な問題（基礎レベル）',
+                badgeColor: 'bg-emerald-600 text-white',
+                borderColor: 'border-emerald-400',
+                icon: '🌿'
+            },
+            {
+                id: '2win',
+                grade: '2勝クラス',
+                name: '2勝クラス特別',
+                desc: '少し簡単な問題（初級〜中級）',
+                badgeColor: 'bg-teal-600 text-white',
+                borderColor: 'border-teal-400',
+                icon: '🚜'
+            },
+            {
+                id: '3win',
+                grade: '3勝クラス',
+                name: '3勝クラス特別',
+                desc: '普通くらいの問題（中級レベル）',
+                badgeColor: 'bg-indigo-600 text-white',
+                borderColor: 'border-indigo-400',
+                icon: '🌾'
+            },
+            {
+                id: 'g3',
+                grade: 'G3',
+                name: '農業記念',
+                desc: '少し難しい問題（重賞レベル）',
+                badgeColor: 'bg-green-600 text-white',
+                borderColor: 'border-green-500',
+                icon: '🥉'
+            },
+            {
+                id: 'g2',
+                grade: 'G2',
+                name: '農林水産賞',
+                desc: '難しい問題（実力派農家レベル）',
+                badgeColor: 'bg-red-600 text-white',
+                borderColor: 'border-red-500',
+                icon: '🥈'
+            },
+            {
+                id: 'g1_spring',
+                grade: 'G1・春',
+                name: '天皇賞（春）',
+                desc: '春農業の超難問！最終直線はキタサンブラックとの一騎打ち！',
+                badgeColor: 'bg-gradient-to-r from-pink-500 to-rose-500 text-white',
+                borderColor: 'border-pink-500',
+                icon: '🌸'
+            },
+            {
+                id: 'g1_summer',
+                grade: 'G1・夏',
+                name: '宝塚記念',
+                desc: '夏農業の超難問！最終直線はタイトルホルダーとの一騎打ち！',
+                badgeColor: 'bg-gradient-to-r from-sky-500 to-blue-600 text-white',
+                borderColor: 'border-sky-500',
+                icon: '🌻'
+            },
+            {
+                id: 'g1_autumn',
+                grade: 'G1・秋',
+                name: '天皇賞（秋）',
+                desc: '秋農業の超難問！最終直線はイクイノックスとの一騎打ち！',
+                badgeColor: 'bg-gradient-to-r from-orange-500 to-amber-600 text-white',
+                borderColor: 'border-orange-500',
+                icon: '🍁'
+            },
+            {
+                id: 'g1_winter',
+                grade: 'G1・冬',
+                name: '有馬記念',
+                desc: '冬農業の超難問！最終直線はゼンノロブロイとの一騎打ち！',
+                badgeColor: 'bg-gradient-to-r from-yellow-500 to-amber-500 text-green-950',
+                borderColor: 'border-yellow-500',
+                icon: '❄️'
+            },
+            {
+                id: 'g1_dubai',
+                grade: '海外G1',
+                name: 'ドバイターフ',
+                desc: '農業の加工・運搬の超難問（全問筆記）！最終直線はジャスタウェイとの一騎打ち！',
+                badgeColor: 'bg-gradient-to-r from-emerald-800 via-teal-700 to-amber-500 text-yellow-200',
+                borderColor: 'border-emerald-600',
+                icon: '🇦🇪',
+                isSecretDubai: true
+            },
+            {
+                id: 'g1_hongkong',
+                grade: '海外G1',
+                name: '香港ヴァーズ',
+                desc: '果樹農家でも難しい超難問（全問筆記）！最終直線はステイゴールドとの一騎打ち！',
+                badgeColor: 'bg-gradient-to-r from-red-800 via-rose-700 to-yellow-500 text-yellow-200',
+                borderColor: 'border-red-600',
+                icon: '🇭🇰',
+                isSecretHongKong: true
+            },
+            {
+                id: 'g1_arc',
+                grade: '海外G1',
+                name: '農業凱旋門賞',
+                desc: '農大でも解けない全問筆記の超難関！最終直線はデインドリームとの決戦！',
+                badgeColor: 'bg-gradient-to-r from-blue-900 via-indigo-800 to-amber-500 text-yellow-300',
+                borderColor: 'border-amber-500',
+                icon: '🇫🇷',
+                isSecretArc: true
+            },
+            {
+                id: 'g1_world',
+                grade: '世界G1',
+                name: '世界農業知識記念',
+                desc: '東大生も頭を抱える世界農業10問（ランダム出題）・300秒！1ミス18着・時間切れ2着の最終決戦！',
+                badgeColor: 'bg-gradient-to-r from-purple-900 via-red-800 to-yellow-500 text-yellow-200',
+                borderColor: 'border-purple-600',
+                icon: '🌍',
+                isSecretWorld: true
+            }
+        ];
+
+        // 春・夏G1完全制覇でドバイターフ解放
+        function isDubaiUnlocked() {
+            const st = window.perfectG1Status || {};
+            return !!(st.g1_spring && st.g1_summer);
+        }
+
+        // 秋・冬G1完全制覇で香港ヴァーズ解放
+        function isHongKongUnlocked() {
+            const st = window.perfectG1Status || {};
+            return !!(st.g1_autumn && st.g1_winter);
+        }
+
+        // 4大G1をすべてパーフェクト（3問全問正解）制覇しているか判定
+        function isArcUnlocked() {
+            const st = window.perfectG1Status || {};
+            return !!(st.g1_spring && st.g1_summer && st.g1_autumn && st.g1_winter);
+        }
+
+        // 農業凱旋門賞・ドバイターフ・香港ヴァーズをすべてパーフェクト制覇しているか判定
+        function isWorldUnlocked() {
+            const st = window.perfectG1Status || {};
+            return !!(st.g1_arc && st.g1_dubai && st.g1_hongkong);
+        }
+
+        // 効果音再生関数（Tone.jsを使用）
+        function playSound(type) {
+            try {
+                if (typeof Tone === 'undefined') return;
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                const synth = new Tone.Synth().toDestination();
+                if (type === 'start') {
+                    synth.triggerAttackRelease("C5", "8n");
+                } else if (type === 'gallop') {
+                    synth.triggerAttackRelease("G3", "32n");
+                } else if (type === 'win') {
+                    const now = Tone.now();
+                    synth.triggerAttackRelease("C5", "16n", now);
+                    synth.triggerAttackRelease("E5", "16n", now + 0.1);
+                    synth.triggerAttackRelease("G5", "16n", now + 0.2);
+                    synth.triggerAttackRelease("C6", "4n", now + 0.3);
+                } else if (type === 'lose') {
+                    synth.triggerAttackRelease("A3", "4n");
+                }
+            } catch (e) {
+                // 音声再生エラーは無視
+            }
+        }
+
+        // 競走馬の名前リスト
+        const HORSE_NAMES = [
+            "キタサンブラックマメ", "ディープインパクトマト", "オグリキャップキャベツ", "トウカイテイオーカミ",
+            "アーモンドアイガモ", "ゴールドシップタマネギ", "ソダシイネカリ", "イクイノックスイートコーン",
+            "コントレイルレタス", "オルフェーヴルリンゴ", "サイレンススズカボチャ", "メジロマックイーンメロン"
+        ];
+
+        // クラス別の農業クイズ問題集（type: 'choice' 4択 / 'ox' 〇× / 'written' 筆記）
+        const QUIZ_DATABASE = {
+            'op': [
+                {
+                    type: 'choice',
+                    category: "お米の基礎",
+                    q: "日本の主食であるお米。田んぼに苗を植える作業を何という？",
+                    choices: ["田植え", "稲刈り", "代掻き", "脱穀"],
+                    answer: 0,
+                    exp: "春に水田へイネの苗を植える作業は「田植え」です。秋に収穫するのが「稲刈り」ですね！"
+                },
+                {
+                    type: 'ox',
+                    category: "野菜の育ち方（〇×）",
+                    q: "ジャガイモは土の「中」にできる野菜である。〇か×か？",
+                    answer: 0,
+                    exp: "正解は「〇」！ジャガイモは土の中で茎（地下茎）がふくらんでできる野菜です。"
+                },
+                {
+                    type: 'written',
+                    category: "農業の道具（筆記）",
+                    q: "畑の土を耕す（柔らかくする）ために使う、後ろにロータリーなどを取り付ける大型の農業機械は何？（カタカナ5文字）",
+                    acceptedAnswers: ["トラクター", "とらくたー"],
+                    displayAnswer: "トラクター",
+                    exp: "「トラクター」は畑の土を耕したり、重いものを牽引したりする農業の主役ともいえる機械です！"
+                }
+            ],
+            '1win': [
+                {
+                    type: 'choice',
+                    category: "土づくり",
+                    q: "植物が育つために必要な「肥料の三要素」は、窒素（N）・リン酸（P）とあと1つは何？",
+                    choices: ["カリウム（K）", "カルシウム（Ca）", "マグネシウム（Mg）", "鉄（Fe）"],
+                    answer: 0,
+                    exp: "窒素（葉肥）・リン酸（花肥・実肥）・カリウム（根肥）の3つが「肥料の三要素」と呼ばれます。"
+                },
+                {
+                    type: 'ox',
+                    category: "果物の雑学（〇×）",
+                    q: "イチゴの赤い実の表面にあるツブツブは「種」ではなく、一つひとつが「果実」である。〇か×か？",
+                    answer: 0,
+                    exp: "正解は「〇」！私たちが普段食べている赤い部分は花托（かたく）がふくらんだもので、表面のツブツブが本来の果実（痩果）です。"
+                },
+                {
+                    type: 'written',
+                    category: "栽培施設（筆記）",
+                    q: "冬でもトマトやイチゴを暖かく育てるために使われる、透明なフィルムで覆われた農業用ハウスを何ハウスという？（カタカナ4文字＋ハウス）",
+                    acceptedAnswers: ["ビニールハウス", "びにーるはうす", "ビニール", "びにーる"],
+                    displayAnswer: "ビニールハウス",
+                    exp: "「ビニールハウス（施設園芸）」のおかげで、気温が低い冬でもおいしい夏野菜やイチゴが栽培できます。"
+                }
+            ],
+            '2win': [
+                {
+                    type: 'choice',
+                    category: "栽培の工夫",
+                    q: "同じ畑で同じ種類の野菜を毎年続けて作ると、病気が出たり育ちが悪くなったりする現象を何という？",
+                    choices: ["連作障害", "光合成不足", "塩害", "徒長（とちょう）"],
+                    answer: 0,
+                    exp: "これを「連作障害」といいます。防ぐために別の科の野菜を順番に育てる「輪作（りんさく）」が行われます。"
+                },
+                {
+                    type: 'ox',
+                    category: "虫と農業（〇×）",
+                    q: "ナナホシテントウなどのテントウムシは、野菜の汁を吸う害虫「アブラムシ」を食べてくれる益虫である。〇か×か？",
+                    answer: 0,
+                    exp: "正解は「〇」！テントウムシは1日に何十匹もアブラムシを食べてくれる、農家にとって心強い味方です。"
+                },
+                {
+                    type: 'written',
+                    category: "有機農業（筆記）",
+                    q: "化学肥料や農薬に頼らず、落ち葉や家畜のふんなどを微生物の力で発酵させて作る有機質肥料を漢字2文字で何という？",
+                    acceptedAnswers: ["堆肥", "たいひ", "タイヒ"],
+                    displayAnswer: "堆肥（たいひ）",
+                    exp: "「堆肥（たいひ）」を土に混ぜることで、土の中の微生物が増え、ふかふかで水はけと保水性の良い土になります。"
+                }
+            ],
+            '3win': [
+                {
+                    type: 'choice',
+                    category: "植物の生理",
+                    q: "マメ科植物（ダイズやレンゲなど）の根に共生し、空気中の窒素を植物が使える形に変える微生物は？",
+                    choices: ["根粒菌（こんりゅうきん）", "乳酸菌", "納豆菌", "酵母菌"],
+                    answer: 0,
+                    exp: "「根粒菌」が空気中の窒素を固定してくれるため、マメ科植物は少ない肥料でも育ち、土を肥やす効果もあります。"
+                },
+                {
+                    type: 'ox',
+                    category: "稲作の技術（〇×）",
+                    q: "稲作で夏場に一度田んぼの水を抜いて土を乾かす「中干し」は、稲が倒れるのを防ぐ効果がある。〇か×か？",
+                    answer: 0,
+                    exp: "正解は「〇」！中干しをすることで過剰な分けつを抑え、土に酸素を送って根を深く強く張らせることで倒伏を防ぎます。"
+                },
+                {
+                    type: 'written',
+                    category: "農業用語（筆記）",
+                    q: "トマトやナスなどで、主枝の葉の付け根から出てくる不要な枝を摘み取る作業を「〇〇かき」という？（漢字1文字またはひらがな2文字）",
+                    acceptedAnswers: ["芽かき", "めかき", "芽", "め"],
+                    displayAnswer: "芽かき（わき芽かき）",
+                    exp: "「芽かき（わき芽かき）」を行うことで、養分が分散するのを防ぎ、風通しを良くして大きな実を実らせます。"
+                }
+            ],
+            'g3': [
+                {
+                    type: 'choice',
+                    category: "土壌学",
+                    q: "日本の畑の約半分を占める、火山灰が堆積してできた黒っぽく軽い土壌を何という？",
+                    choices: ["黒ボク土", "赤黄色土", "褐色森林土", "泥炭土"],
+                    answer: 0,
+                    exp: "「黒ボク土（アンドソル）」は水はけが良い反面、リン酸を強く吸着して植物が吸いにくくなる性質があります。"
+                },
+                {
+                    type: 'ox',
+                    category: "果実の成熟（〇×）",
+                    q: "リンゴやバナナが出す「エチレンガス」は、他の果物の熟成（追熟）を遅らせる働きがある。〇か×か？",
+                    answer: 1,
+                    exp: "正解は「×」！エチレンガスは熟成（老化）を「早める」植物ホルモンです。未熟なキウイをリンゴと一緒に入れると早く甘くなります。"
+                },
+                {
+                    type: 'written',
+                    category: "品種改良（筆記）",
+                    q: "種なしブドウ（デラウェアやシャインマスカットなど）を作る際に房を浸す植物ホルモン剤は何？（カタカナ5文字）",
+                    acceptedAnswers: ["ジベレリン", "じべれりん"],
+                    displayAnswer: "ジベレリン",
+                    exp: "開花前と満開後の2回「ジベレリン処理」を行うことで、受粉しなくても果実が大きくなり種なしブドウになります。"
+                }
+            ],
+            'g2': [
+                {
+                    type: 'choice',
+                    category: "作物の光合成",
+                    q: "次の作物のうち、光合成の効率が高く高温や強い光に強い「C4植物」に分類されるものはどれ？",
+                    choices: ["トウモロコシ", "イネ", "コムギ", "ダイズ"],
+                    answer: 0,
+                    exp: "トウモロコシやサトウキビは「C4植物」で、CO2を濃縮する仕組みを持ちます。イネ・コムギ・ダイズは「C3植物」です。"
+                },
+                {
+                    type: 'ox',
+                    category: "病害虫防除（〇×）",
+                    q: "畑にメスの性フェロモン剤を充満させて、オスの害虫がメスを見つけられなくする防除法を「交信撹乱法」という。〇か×か？",
+                    answer: 0,
+                    exp: "正解は「〇」！農薬の使用量を減らせる環境保全型農業の代表的な技術です。"
+                },
+                {
+                    type: 'written',
+                    category: "土壌化学（筆記）",
+                    q: "土壌が肥料成分（陽イオン）を保持する力の大きさを示す指標「陽イオン交換容量」のアルファベット3文字の略称は？",
+                    acceptedAnswers: ["CEC", "cec", "ＣＥＣ"],
+                    displayAnswer: "CEC",
+                    exp: "「CEC（Cation Exchange Capacity）」が高い土ほど保肥力が高く、肥料が流亡しにくくなります。"
+                }
+            ],
+            'g1_spring': [
+                {
+                    type: 'choice',
+                    category: "春の稲作・育苗（G1超難問）",
+                    q: "春の水稲育苗において、苗が白く抜けて枯れてしまう生理障害「ムレ苗」の主な原因となるカビ（糸状菌）の属名はどれ？",
+                    choices: ["ピシウム属菌（Pythium）", "いもち病菌（Pyricularia）", "紋枯病菌（Rhizoctonia）", "ばか苗病菌（Fusarium）"],
+                    answer: 0,
+                    exp: "低温や過湿などのストレスで苗の根が弱ったところに「ピシウム属菌」などが感染することで、急激に萎れて白くなる「ムレ苗」が発生します。"
+                },
+                {
+                    type: 'ox',
+                    category: "春野菜の生理（〇×）",
+                    q: "春まきのキャベツやダイコンが、一定の低温にさらされた後に日が長くなることで花芽を作り、トウ立ち（抽苔）する現象を「バーナリゼーション（春化）」という。〇か×か？",
+                    answer: 0,
+                    exp: "正解は「〇」！春化（バーナリゼーション）により花茎が伸びてしまうと、葉が硬くなったり根にスが入ったりして商品価値が下がります。"
+                },
+                {
+                    type: 'written',
+                    rivalHorse: "キタサンブラック",
+                    category: "天皇賞（春）最終決戦・筆記",
+                    q: "【キタサンブラックに勝て！】春の田植え前に、水を入れた田んぼの土を砕いてかき混ぜ、水漏れを防いで表面を平らにする作業を漢字2文字で何という？",
+                    acceptedAnswers: ["代掻き", "代かき", "しろかき", "シロカキ"],
+                    displayAnswer: "代掻き（しろかき）",
+                    exp: "逃げ粘る王者キタサンブラックをゴール前で差し切った！「代掻き」によって田んぼの底に水を通しにくい耕盤層が形成されます。"
+                }
+            ],
+            'g1_summer': [
+                {
+                    type: 'choice',
+                    category: "夏場の高温障害（G1超難問）",
+                    q: "夏の登熟期にフェーン現象や猛暑が続くと発生する、お米の胚乳にデンプンが十分に詰まらず白く濁る米粒の総称は？",
+                    choices: ["白未熟粒（背白米・乳白米など）", "胴割米", "青未熟粒", "カメムシ斑点米"],
+                    answer: 0,
+                    exp: "出穂後約20日間の平均気温が27℃を超えると、デンプン合成酵素の働きが鈍り「白未熟粒（乳白米・背白粒・基白粒）」が多発します。"
+                },
+                {
+                    type: 'ox',
+                    category: "夏野菜の生理障害（〇×）",
+                    q: "夏のトマト栽培で果実のお尻部分が黒く変色する「尻腐れ病」は、主に「窒素」の吸収不足によって引き起こされる。〇か×か？",
+                    answer: 1,
+                    exp: "正解は「×」！尻腐れ病は病原菌ではなく「カルシウム（石灰）欠乏」による生理障害です。夏の高温・乾燥で根からの水分とカルシウムの吸収が滞ることで発生します。"
+                },
+                {
+                    type: 'written',
+                    rivalHorse: "タイトルホルダー",
+                    category: "宝塚記念 最終決戦・筆記",
+                    q: "【タイトルホルダーに勝て！】真夏のハウスを密閉し、太陽の熱と水の力で地温を50℃以上に上げて土壌病害虫や雑草の種子を死滅させる消毒法を「〇〇〇〇消毒法」という？（漢字4文字）",
+                    acceptedAnswers: ["太陽熱消毒", "太陽熱消毒法", "太陽熱", "たいようねつ", "たいようねつしょうどく"],
+                    displayAnswer: "太陽熱消毒（法）",
+                    exp: "快足逃げ馬タイトルホルダーを撃破！「太陽熱消毒法」は真夏の強い日差しを利用し、農薬を使わずに土をリセットできる優れた技術です。"
+                }
+            ],
+            'g1_autumn': [
+                {
+                    type: 'choice',
+                    category: "秋の収穫・品質評価（G1超難問）",
+                    q: "秋に収穫されたお米の食味を左右する成分のうち、粘り気に関係するデンプン「アミロペクチン」と対になる、パサつきに関係するデンプンは何？",
+                    choices: ["アミロース", "セルロース", "グリコーゲン", "イヌリン"],
+                    answer: 0,
+                    exp: "うるち米のデンプンは約80%がアミロペクチン、約20%が「アミロース」です。アミロース含有率が低いお米ほど粘りが強くモチモチした食感になります。"
+                },
+                {
+                    type: 'ox',
+                    category: "秋の果樹・紅葉（〇×）",
+                    q: "秋のリンゴの果皮が赤く色づくのに最も重要な色素は「アントシアニン」であり、昼夜の寒暖差が大きく太陽光が当たることで生成が促進される。〇か×か？",
+                    answer: 0,
+                    exp: "正解は「〇」！そのため秋にはリンゴの周りの葉を摘む「葉摘み」や、地面に反射シートを敷いて果実全体に光を当てる作業が行われます。"
+                },
+                {
+                    type: 'written',
+                    rivalHorse: "イクイノックス",
+                    category: "天皇賞（秋）最終決戦・筆記",
+                    q: "【イクイノックスに勝て！】収穫したての籾（もみ）を急激に高温乾燥させたり、圃場で急激な乾湿変化が起きると、玄米の内部にヒビが入る現象を何という？（漢字3文字：〇〇米）",
+                    acceptedAnswers: ["胴割米", "どうわれまい", "胴割れ米", "胴割れ", "どうわれ"],
+                    displayAnswer: "胴割米（どうわれまい）",
+                    exp: "世界最強馬イクイノックスとの壮絶な叩き合いを制した！「胴割米」を防ぐため、二段乾燥などでゆっくり水分を落とす技術が使われます。"
+                }
+            ],
+            'g1_winter': [
+                {
+                    type: 'choice',
+                    category: "冬の野菜・糖度上昇（G1超難問）",
+                    q: "ホウレンソウやハクサイなどの冬野菜が、氷点下の寒さに耐えるために細胞内のデンプンを糖に分解して凍結を防ぐ現象を何という？",
+                    choices: ["低温糖化（寒締め）", "休眠打破", "光周性反応", "アポトーシス"],
+                    answer: 0,
+                    exp: "細胞内の糖濃度を高めることで凝固点降下を起こし、細胞が凍って破壊されるのを防ぎます。この性質を利用した栽培法が「寒締め（かんじめ）」です。"
+                },
+                {
+                    type: 'ox',
+                    category: "冬場の果樹管理（〇×）",
+                    q: "落葉果樹（モモやブドウなど）は、冬に一定時間の「低温」にさらされないと春の休眠から目覚めず、発芽不良を起こす。〇か×か？",
+                    answer: 0,
+                    exp: "正解は「〇」！これを「休眠打破（きゅうみんだは）」に必要な低温要求量といい、近年の暖冬では休眠打破不足が果樹農家の大きな課題となっています。"
+                },
+                {
+                    type: 'written',
+                    rivalHorse: "ゼンノロブロイ",
+                    category: "有馬記念 最終決戦・筆記",
+                    q: "【ゼンノロブロイに勝て！】植物が花を咲かせる際に葉で作られ、師管を通って茎頂へ運ばれる「花成ホルモン（フロリゲン）」の正体であるタンパク質をアルファベット2文字＋タンパク質で何という？",
+                    acceptedAnswers: ["FTタンパク質", "ftタンパク質", "FT", "ft", "ＦＴタンパク質", "フロリゲン"],
+                    displayAnswer: "FTタンパク質",
+                    exp: "秋古馬三冠馬ゼンノロブロイをゴール前でハナ差差し切った！フロリゲンの正体が「FTタンパク質」であることが2007年に解明されました。"
+                }
+            ],
+            'g1_dubai': [
+                {
+                    type: 'written',
+                    category: "農産物の予冷・運搬（ドバイG1・筆記1）",
+                    q: "収穫直後のレタスやホウレンソウなどの葉物野菜を、大きな減圧タンク内で水分の一部を蒸発させる際の気化熱を利用して、わずか20〜30分で芯まで急速冷却する予冷方式を漢字4文字で何という？（〇〇冷却）",
+                    acceptedAnswers: ["真空冷却", "しんくうれいきゃく", "真空", "しんくう", "真空冷却方式", "バキュームクーリング"],
+                    displayAnswer: "真空冷却（方式）",
+                    exp: "「真空冷却（バキュームクーリング）」は葉面積が大きい葉物野菜に最適で、品温を急速に下げることで呼吸量を抑え、鮮度を保ったまま長距離輸送を可能にします。"
+                },
+                {
+                    type: 'written',
+                    category: "青果物の長期貯蔵技術（ドバイG1・筆記2）",
+                    q: "リンゴなどの長期貯蔵に用いられ、庫内の酸素濃度を空気中（約21%）より低くし、二酸化炭素濃度を高く人工的に制御することで呼吸と熟成を抑制する貯蔵法を「〇〇貯蔵」という？（アルファベット2文字）",
+                    acceptedAnswers: ["CA", "ca", "ＣＡ", "CA貯蔵", "ca貯蔵", "ＣＡ貯蔵"],
+                    displayAnswer: "CA貯蔵",
+                    exp: "低酸素・高二酸化炭素環境を作る「CA貯蔵（Controlled Atmosphere貯蔵）」により、秋に収穫したリンゴを翌年の夏までシャキシャキのまま出荷することができます。"
+                },
+                {
+                    type: 'written',
+                    rivalHorse: "ジャスタウェイ",
+                    category: "ドバイターフ 最終決戦・筆記3",
+                    q: "【ジャスタウェイに勝て！】メイダン競馬場の長い直線！農産物の加工・貯蔵において、収穫後の青果物が自らの呼吸や蒸散によって目減り・品質低下することを防ぐため、収穫から消費者の手に渡るまで一貫して低温管理を行う流通システムをカタカナ9文字で何という？",
+                    acceptedAnswers: ["コールドチェーン", "こーるどちぇーん", "低温物流", "ていおんぶつりゅう"],
+                    displayAnswer: "コールドチェーン",
+                    exp: "世界レーティング1位・驚異のレコード馬ジャスタウェイを差し切った！！「コールドチェーン（低温流通体系）」は生鮮農産物の品質保持と輸出拡大に不可欠な技術です。"
+                }
+            ],
+            'g1_hongkong': [
+                {
+                    type: 'written',
+                    category: "果樹の接ぎ木・台木（香港G1・筆記1）",
+                    q: "リンゴ栽培において、樹をコンパクトにして作業性を高め、早期結実（早く実がなること）を促すために用いられる、樹勢を弱める性質を持つ台木を「〇〇台木」という？（ひらがな2文字＋漢字1文字）",
+                    acceptedAnswers: ["わい性台木", "矮性台木", "わいせいだいぎ", "わい性", "矮性", "わいせい"],
+                    displayAnswer: "わい性台木（矮性台木）",
+                    exp: "「わい性台木」を利用するわい化栽培により、脚立を使わずに収穫・剪定ができ、密植による高収量化が可能になります。"
+                },
+                {
+                    type: 'written',
+                    category: "果樹の結実・受粉生理（香港G1・筆記2）",
+                    q: "ニホンナシやリンゴの多くの品種に見られる、自分の花粉が自分のめしべについても受精しないため、受粉樹（別の品種）を混植する必要がある性質を漢字6文字で何という？",
+                    acceptedAnswers: ["自家不和合性", "じかふわごうせい", "ジカフワゴウセイ"],
+                    displayAnswer: "自家不和合性（じかふわごうせい）",
+                    exp: "「自家不和合性」はS遺伝子によって制御されており、同じS遺伝子型を持つ品種同士（例：幸水と新水など）でも受精しないため品種の組み合わせが重要です。"
+                },
+                {
+                    type: 'written',
+                    rivalHorse: "ステイゴールド",
+                    category: "香港ヴァーズ 最終決戦・筆記3",
+                    q: "【ステイゴールドに勝て！】シャティン競馬場の最終直線！ウンシュウミカンやカキなどの果樹において、果実がたくさん成った「表年」の翌年に、花芽の形成が抑制されて極端に収穫量が減る「裏年」が交互に繰り返される現象を漢字4文字で何という？",
+                    acceptedAnswers: ["隔年結果", "かくねんけっか", "カクネンケッカ"],
+                    displayAnswer: "隔年結果（かくねんけっか）",
+                    exp: "黄金旅程ステイゴールドとの死闘をゴール前で制した！！「隔年結果」を防ぐため、果樹農家は摘蕾・摘果や剪定によって樹勢と着果量のバランスを精密にコントロールします。"
+                }
+            ],
+            'g1_arc': [
+                {
+                    type: 'written',
+                    category: "土壌鉱物学（農大院試レベル・筆記1）",
+                    q: "日本の黒ボク土の主成分であり、火山ガラスが風化して生成される非晶質（結晶構造を持たない）ケイ酸塩鉱物で、リン酸を極めて強く固定する性質を持つ粘土鉱物をカタカナ5文字で何という？",
+                    acceptedAnswers: ["アロフェン", "あろふぇん"],
+                    displayAnswer: "アロフェン",
+                    exp: "「アロフェン（Allophane）」は黒ボク土に特有の非晶質粘土鉱物で、活性アルミニウムを多く含むためリン酸イオンと強く結合し、作物のリン酸欠乏を引き起こします。"
+                },
+                {
+                    type: 'written',
+                    category: "土壌微生物生態学（農大院試レベル・筆記2）",
+                    q: "未熟な堆肥やオガクズなど炭素率（C/N比）が極めて高い有機物を畑に施用した際、土壌微生物が増殖するために土中の無機態窒素を取り込んでしまい、作物が窒素不足に陥る現象を漢字4文字で何という？",
+                    acceptedAnswers: ["窒素飢餓", "ちっそきが", "チッソキガ"],
+                    displayAnswer: "窒素飢餓（ちっそきが）",
+                    exp: "「窒素飢餓」はC/N比が20〜30を超える有機物を大量投入した際に発生します。微生物が分解のために周囲の硝酸態窒素などを奪い尽くす現象です。"
+                },
+                {
+                    type: 'written',
+                    rivalHorse: "デインドリーム",
+                    category: "農業凱旋門賞 最終決戦・筆記3",
+                    q: "【デインドリームに勝て！】ロンシャン競馬場の直線！大気中の窒素と水素を高温・高圧下で鉄系触媒を用いて反応させアンモニアを合成し、世界の化学肥料生産と人口爆発を支えた工業的製法を「〇〇〇〇・ボッシュ法」という？（カタカナ4文字）",
+                    acceptedAnswers: ["ハーバー", "はーばー", "ハーバー・ボッシュ法", "ハーバーボッシュ法"],
+                    displayAnswer: "ハーバー・ボッシュ法",
+                    exp: "凱旋門賞馬デインドリームをゴール前で差し切った！！フリッツ・ハーバーとカール・ボッシュが開発したこの技術は人類史最大の発明の一つと称されます。"
+                }
+            ],
+            'g1_world': [
+                {
+                    type: 'written',
+                    category: "世界農業・土壌分類（世界G1・第1問）",
+                    q: "ウクライナからロシア南部、カザフスタンにかけてのステップ気候帯に分布する、世界最高水準の肥沃度を誇る黒色土（チェルノーゼム）のロシア語由来の意味は「〇〇土」？（漢字1文字）",
+                    acceptedAnswers: ["黒", "くろ", "黒色", "こくしょく"],
+                    displayAnswer: "黒（黒土）",
+                    exp: "チェルノーゼム（Chernozem）はロシア語で「黒い土」を意味し、腐植層が非常に厚く世界の穀倉地帯を支えています。"
+                },
+                {
+                    type: 'written',
+                    category: "世界農業・乾燥地帯（世界G1・第2問）",
+                    q: "アメリカ合衆国のグレートプレーンズなどで地下水（オガララ帯水層など）を汲み上げ、回転式の巨大な散水パイプで円形の農地を作り出す大規模灌漑農法を何という？（カタカナ9文字：〇〇〇〇ピボット）",
+                    acceptedAnswers: ["センターピボット", "せんたーぴぼっと", "センター", "せんたー"],
+                    displayAnswer: "センターピボット",
+                    exp: "「センターピボット（Center Pivot）」灌漑により、上空から見ると砂漠や草原に無数の緑の真円が並ぶ独特の景観が生まれます。"
+                },
+                {
+                    type: 'written',
+                    category: "世界農業・南米開拓（世界G1・第3問）",
+                    q: "ブラジル中部の熱帯サバンナ地帯に広がり、かつては強酸性で不毛の大地とされたが、石灰投入と品種改良によって世界有数の大豆・トウモロコシ生産地帯へと変貌した地域をカタカナ4文字で何という？",
+                    acceptedAnswers: ["セラード", "せらーど"],
+                    displayAnswer: "セラード",
+                    exp: "「セラード（Cerrado）」の農業開発は20世紀最大の農業フロンティア開発と呼ばれ、日本の国際協力（JICA）も大きく貢献しました。"
+                },
+                {
+                    type: 'written',
+                    category: "世界農業・国際機関（世界G1・第4問）",
+                    q: "イタリアのローマに本部を置き、世界の食料安全保障の確保や農林水産業の発展を目的とする国際連合の専門機関のアルファベット3文字の略称は？",
+                    acceptedAnswers: ["FAO", "fao", "ＦＡＯ"],
+                    displayAnswer: "FAO（国連食糧農業機関）",
+                    exp: "「FAO（Food and Agriculture Organization）」は1945年に設立され、世界農業遺産（GIAHS）の認定なども行っています。"
+                },
+                {
+                    type: 'written',
+                    category: "世界農業・種子保全（世界G1・第5問）",
+                    q: "北極圏のノルウェー領スピッツベルゲン島の永久凍土内に建設された、世界中の農作物の種子を核戦争や気候変動から守るために保管している施設「〇〇〇〇〇〇世界種子貯蔵庫」？（カタカナ6文字）",
+                    acceptedAnswers: ["スヴァールバル", "すゔぁーるばる", "スバールバル", "すばーるばる"],
+                    displayAnswer: "スヴァールバル世界種子貯蔵庫",
+                    exp: "通称「終末の日の貯蔵庫」とも呼ばれる「スヴァールバル世界種子貯蔵庫」には、世界中から100万種以上の作物の種子が冷凍保存されています。"
+                },
+                {
+                    type: 'written',
+                    category: "世界農業・伝統灌漑（世界G1・第6問）",
+                    q: "イランなどの乾燥地帯で、山麓の地下水を蒸発させずに数km〜数十km先の農地まで導くために掘られた伝統的な地下水道（横井戸）を何という？（カタカナ4文字）",
+                    acceptedAnswers: ["カナート", "かなーと"],
+                    displayAnswer: "カナート",
+                    exp: "「カナート（Qanat）」は紀元前1千年紀にペルシャで発明され、北アフリカではフォガラ、中国新疆ではカレーズと呼ばれます。"
+                },
+                {
+                    type: 'written',
+                    category: "世界農業・作物起源（世界G1・第7問）",
+                    q: "世界中の栽培植物の起源地（遺伝子中心）を8つの地域に分類した、20世紀のロシア（ソ連）の偉大な植物学者・遺伝学者の名字は？（カタカナ5文字）",
+                    acceptedAnswers: ["ヴァヴィロフ", "ゔぁゔぃろふ", "バビロフ", "ばびろふ"],
+                    displayAnswer: "ヴァヴィロフ（ニコライ・ヴァヴィロフ）",
+                    exp: "ニコライ・ヴァヴィロフは世界中を調査して膨大な種子コレクションを築き、「栽培植物の起源中心説」を提唱しました。"
+                },
+                {
+                    type: 'written',
+                    category: "世界農業・環境問題（世界G1・第8問）",
+                    q: "中央アジアのウズベキスタンとカザフスタンにまたがり、ソ連時代の過度な綿花栽培のための灌漑取水によって20世紀後半に面積が約10分の1まで縮小し「20世紀最大の環境破壊」と呼ばれた塩湖は？",
+                    acceptedAnswers: ["アラル海", "あらるかい", "アラル", "あらる"],
+                    displayAnswer: "アラル海",
+                    exp: "アムダリヤ川とシルダリヤ川からの大規模灌漑取水により「アラル海」は急速に干上がり、塩害や砂嵐が周辺農業に壊滅的被害を与えました。"
+                },
+                {
+                    type: 'written',
+                    category: "世界農業・遺伝子資源（世界G1・第9問）",
+                    q: "2010年に採択された、外国の遺伝資源（植物の種や微生物など）を利用して得られた利益を原産国と公正に配分することを定めた国際議定書は「〇〇議定書」？（日本の都市名・漢字3文字）",
+                    acceptedAnswers: ["名古屋", "なごや", "名古屋議定書", "なごやぎていしょ"],
+                    displayAnswer: "名古屋議定書",
+                    exp: "生物多様性条約第10回締約国会議（COP10）で採択された「名古屋議定書（ABS）」は、品種改良やバイオ農業における国際ルールの根幹です。"
+                },
+                {
+                    type: 'written',
+                    rivalHorse: "ノウギョウノックス",
+                    category: "世界農業知識記念 最終決戦・第10問",
+                    q: "【ノウギョウノックスに勝て！】世界最高峰の最終直線！大気中のCO2を吸収する植物の光合成において、カルビン・ベンソン回路の最初の段階でCO2を固定する、地球上で最も存在量が多いとされる酵素の略称は？（カタカナ4文字）",
+                    acceptedAnswers: ["ルビスコ", "るびすこ", "RuBisCO", "rubisco"],
+                    displayAnswer: "ルビスコ（RuBisCO）",
+                    exp: "世界最強馬ノウギョウノックスを完全に差し切った！！「ルビスコ（リブロース1,5-ビスリン酸カルボキシラーゼ/オキシゲナーゼ）」は地球上の全タンパク質の約半分を占めるとも言われる生命維持の要です！"
+                }
+            ]
+        };
+
+        // ゲーム状態管理変数
+        let currentMode = 'single';
+        let currentClassIndex = 0;
+        let currentQuestions = [];
+        let stepIndex = 0;
+        let correctCount = 0;
+        let isAnswered = false;
+        let horsePositions = [2, 2, 2, 2];
+        let activeTimers = [];
+
+        // 世界農業知識記念（300秒制限）用の状態変数
+        let raceCountdownInterval = null;
+        let remainingSeconds = 300;
+        let isTimeOutLose = false;
+        let isInstant18thLose = false;
+
+        // タイマー一括クリア用ヘルパー
+        function clearAllTimers() {
+            activeTimers.forEach(id => clearTimeout(id));
+            activeTimers = [];
+        }
+
+        function stopRaceCountdown() {
+            if (raceCountdownInterval) {
+                clearInterval(raceCountdownInterval);
+                raceCountdownInterval = null;
+            }
+        }
+
+        // 初期化：ホーム画面のクラス一覧カードを生成
+        function initHomeScreen() {
+            const grid = document.getElementById('class-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            const dubaiUnlocked = isDubaiUnlocked();
+            const hkUnlocked = isHongKongUnlocked();
+            const arcUnlocked = isArcUnlocked();
+            const worldUnlocked = isWorldUnlocked();
+            const st = window.perfectG1Status || {};
+            const clearedCount = [st.g1_spring, st.g1_summer, st.g1_autumn, st.g1_winter].filter(Boolean).length;
+
+            RACE_CLASSES.forEach((cls, idx) => {
+                // ドバイターフは春・夏G1完全制覇前はロック表示
+                if (cls.isSecretDubai && !dubaiUnlocked) {
+                    const lockedDubaiCard = document.createElement('div');
+                    lockedDubaiCard.className = "bg-gray-100 p-4 rounded-xl border-2 border-dashed border-emerald-400 text-left flex flex-col justify-between opacity-85";
+                    lockedDubaiCard.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-emerald-800 text-white font-keiba text-xs px-2.5 py-1 rounded">🔒 未解放G1</span>
+                            <span class="text-2xl">🇦🇪</span>
+                        </div>
+                        <div>
+                            <div class="font-bold text-gray-700 text-sm sm:text-base">？？？ （G1 ドバイターフ）</div>
+                            <div class="text-xs text-gray-500 mt-1">解放条件：「G1・春」と「G1・夏」を両方とも全問正解で完全制覇</div>
+                        </div>
+                    `;
+                    grid.appendChild(lockedDubaiCard);
+                    return;
+                }
+
+                // 香港ヴァーズは秋・冬G1完全制覇前はロック表示
+                if (cls.isSecretHongKong && !hkUnlocked) {
+                    const lockedHkCard = document.createElement('div');
+                    lockedHkCard.className = "bg-gray-100 p-4 rounded-xl border-2 border-dashed border-red-400 text-left flex flex-col justify-between opacity-85";
+                    lockedHkCard.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-red-800 text-white font-keiba text-xs px-2.5 py-1 rounded">🔒 未解放G1</span>
+                            <span class="text-2xl">🇭🇰</span>
+                        </div>
+                        <div>
+                            <div class="font-bold text-gray-700 text-sm sm:text-base">？？？ （G1 香港ヴァーズ）</div>
+                            <div class="text-xs text-gray-500 mt-1">解放条件：「G1・秋」と「G1・冬」を両方とも全問正解で完全制覇</div>
+                        </div>
+                    `;
+                    grid.appendChild(lockedHkCard);
+                    return;
+                }
+
+                // 農業凱旋門賞は4大G1完全制覇前はロック表示
+                if (cls.isSecretArc && !arcUnlocked) {
+                    const lockedCard = document.createElement('div');
+                    lockedCard.className = "bg-gray-100 p-4 rounded-xl border-2 border-dashed border-gray-400 text-left flex flex-col justify-between opacity-85";
+                    lockedCard.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-gray-500 text-white font-keiba text-xs px-2.5 py-1 rounded">🔒 未解放G1</span>
+                            <span class="text-2xl">🇫🇷</span>
+                        </div>
+                        <div>
+                            <div class="font-bold text-gray-700 text-sm sm:text-base">？？？ （G1 農業凱旋門賞）</div>
+                            <div class="text-xs text-gray-500 mt-1">解放条件：春夏秋冬のG1をすべて全問正解で制覇（現在 ${clearedCount} / 4 冠）</div>
+                        </div>
+                    `;
+                    grid.appendChild(lockedCard);
+                    return;
+                }
+
+                // 世界農業知識記念は農業凱旋門賞・ドバイターフ・香港ヴァーズをすべて完全制覇するまでロック表示
+                if (cls.isSecretWorld && !worldUnlocked) {
+                    const overseasCleared = [st.g1_arc, st.g1_dubai, st.g1_hongkong].filter(Boolean).length;
+                    const lockedWorldCard = document.createElement('div');
+                    lockedWorldCard.className = "bg-gray-100 p-4 rounded-xl border-2 border-dashed border-purple-400 text-left flex flex-col justify-between opacity-85";
+                    lockedWorldCard.innerHTML = `
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-purple-800 text-white font-keiba text-xs px-2.5 py-1 rounded">🔒 最終G1</span>
+                            <span class="text-2xl">🌍</span>
+                        </div>
+                        <div>
+                            <div class="font-bold text-gray-700 text-sm sm:text-base">？？？ （G1 世界農業知識記念）</div>
+                            <div class="text-xs text-gray-500 mt-1">解放条件：農業凱旋門賞・ドバイターフ・香港ヴァーズをすべて完全制覇（現在 ${overseasCleared} / 3 冠）</div>
+                        </div>
+                    `;
+                    grid.appendChild(lockedWorldCard);
+                    return;
+                }
+
+                const isG1Perfect = cls.id.startsWith('g1_') && st[cls.id];
+                const card = document.createElement('button');
+                card.onclick = () => startSingleRace(idx);
+                card.className = `bg-white hover:bg-green-50 p-4 rounded-xl shadow border-2 ${cls.borderColor} text-left transition transform hover:-translate-y-1 active:scale-95 flex flex-col justify-between relative overflow-hidden`;
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center space-x-1.5">
+                            <span class="${cls.badgeColor} font-keiba text-xs px-2.5 py-1 rounded shadow-sm">${cls.grade}</span>
+                            ${isG1Perfect ? '<span class="bg-yellow-300 text-green-950 font-bold text-[10px] px-2 py-0.5 rounded-full border border-yellow-500">👑完全制覇</span>' : ''}
+                        </div>
+                        <span class="text-2xl">${cls.icon}</span>
+                    </div>
+                    <div>
+                        <div class="font-bold text-gray-900 text-sm sm:text-base">${cls.name}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">${cls.desc}</div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            // 筆記入力欄のEnterキー対応（重複登録防止）
+            const writtenInput = document.getElementById('written-input');
+            if (writtenInput && !writtenInput.dataset.boundEnter) {
+                writtenInput.dataset.boundEnter = "true";
+                writtenInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        submitWrittenAnswer();
+                    }
+                });
+            }
+        }
+
+        // 単発レース開始
+        function startSingleRace(classIdx) {
+            currentMode = 'single';
+            currentClassIndex = classIdx;
+            setupRace();
+        }
+
+        // キャリアモード（OPからスタート）開始
+        function startCareerMode() {
+            currentMode = 'career';
+            currentClassIndex = 0;
+            setupRace();
+        }
+
+        // レースのセットアップ
+        function setupRace() {
+            clearAllTimers();
+            stopRaceCountdown();
+            const cls = RACE_CLASSES[currentClassIndex];
+            const rawQuestions = [...QUIZ_DATABASE[cls.id]];
+
+            // 世界農業知識記念は問題をランダムにシャッフル（最終第10問のラスボス戦は最後に固定）
+            if (cls.id === 'g1_world') {
+                const finalBossQ = rawQuestions.pop();
+                for (let i = rawQuestions.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [rawQuestions[i], rawQuestions[j]] = [rawQuestions[j], rawQuestions[i]];
+                }
+                rawQuestions.push(finalBossQ);
+            }
+
+            currentQuestions = rawQuestions;
+            stepIndex = 0;
+            correctCount = 0;
+            horsePositions = [2, 2, 2, 2];
+            isTimeOutLose = false;
+            isInstant18thLose = false;
+
+            // 画面切り替え
+            document.getElementById('home-screen').classList.add('hidden');
+            document.getElementById('final-result-screen').classList.add('hidden');
+            document.getElementById('race-screen').classList.remove('hidden');
+
+            // ヘッダー情報更新
+            const badge = document.getElementById('race-grade-badge');
+            badge.textContent = cls.grade;
+            badge.className = `px-2.5 py-1 rounded font-keiba text-xs sm:text-sm shadow ${cls.badgeColor}`;
+            document.getElementById('race-title').textContent = cls.name;
+
+            // 世界農業知識記念（300秒制限タイマー）の制御
+            const timerBox = document.getElementById('race-timer-box');
+            const timerText = document.getElementById('race-timer-text');
+            if (cls.id === 'g1_world') {
+                remainingSeconds = 300;
+                timerText.textContent = remainingSeconds;
+                timerBox.classList.remove('hidden');
+                raceCountdownInterval = setInterval(() => {
+                    remainingSeconds--;
+                    timerText.textContent = Math.max(0, remainingSeconds);
+                    if (remainingSeconds <= 0) {
+                        stopRaceCountdown();
+                        clearAllTimers();
+                        isTimeOutLose = true;
+                        showToast("⏱ 300秒経過！タイムオーバーにより惜しくも2着…！");
+                        showFinalResult();
+                    }
+                }, 1000);
+            } else {
+                timerBox.classList.add('hidden');
+            }
+
+            playSound('start');
+            renderQuestion();
+        }
+
+        // 問題の描画（4択・〇×・筆記の切り替え対応）
+        function renderQuestion() {
+            clearAllTimers();
+            isAnswered = false;
+            document.getElementById('step-result-modal').classList.add('hidden');
+            document.getElementById('live-commentary-bar').classList.add('hidden');
+
+            const cls = RACE_CLASSES[currentClassIndex];
+            const qData = currentQuestions[stepIndex];
+            let cornerLabel = "";
+            if (cls.id === 'g1_world') {
+                cornerLabel = stepIndex < 3 ? "序盤の先行争い" : (stepIndex < 7 ? "向正面〜第3コーナー" : (stepIndex < 9 ? "第4コーナー大外進出" : "最後の直線・運命の第10問"));
+            } else {
+                const cornerNames = ["第1コーナー（序盤戦）", "第3コーナー（中盤の攻防）", "最後の直線（運命のゴール前）"];
+                cornerLabel = cornerNames[stepIndex] || "直線攻防";
+            }
+            document.getElementById('race-subtitle').textContent = `${cornerLabel} - ${stepIndex + 1} / ${currentQuestions.length} 問目`;
+            document.getElementById('race-score-display').textContent = `${correctCount}勝 ${stepIndex - correctCount}敗`;
+            document.getElementById('question-category').textContent = qData.category;
+            document.getElementById('question-text').textContent = qData.q;
+
+            // 馬の位置リセット・アニメーション開始
+            for (let i = 0; i < 4; i++) {
+                const runner = document.getElementById(`runner-${i}`);
+                if (runner) {
+                    runner.style.transition = 'left 0.4s ease-out';
+                    runner.style.left = `${horsePositions[i]}%`;
+                    runner.classList.add('animate-gallop');
+                }
+            }
+
+            const choicesContainer = document.getElementById('horse-choices');
+            const writtenBox = document.getElementById('written-answer-box');
+            const typeBadge = document.getElementById('question-type-badge');
+            const instruction = document.getElementById('answer-instruction');
+
+            choicesContainer.innerHTML = '';
+            choicesContainer.classList.add('hidden');
+            writtenBox.classList.add('hidden');
+
+            const shuffledNames = [...HORSE_NAMES].sort(() => 0.5 - Math.random());
+
+            if (qData.type === 'ox') {
+                typeBadge.textContent = "⭕❌ 〇×マッチレース";
+                typeBadge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300";
+                instruction.innerHTML = `<i class="fa-solid fa-horse-head text-green-700 mr-1.5"></i> 「〇（1番馬）」か「×（2番馬）」を選んで出走させよう！`;
+                choicesContainer.classList.remove('hidden');
+
+                const oxOptions = [
+                    { label: "⭕ 〇（正しい）", horse: shuffledNames[0] },
+                    { label: "❌ ×（誤り）", horse: shuffledNames[1] }
+                ];
+
+                oxOptions.forEach((opt, idx) => {
+                    const wakuClass = `waku-${idx + 1}`;
+                    const btn = document.createElement('button');
+                    btn.id = `horse-btn-${idx}`;
+                    btn.onclick = () => selectHorse(idx);
+                    btn.className = "bg-white hover:bg-yellow-50 border-2 border-gray-300 hover:border-green-600 p-4 rounded-xl shadow-sm flex items-center space-x-3 text-left transition transform active:scale-95 group";
+                    btn.innerHTML = `
+                        <div class="${wakuClass} w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 shadow">
+                            <span class="text-[9px] leading-none">馬番</span>
+                            <span class="font-keiba text-lg leading-tight">${idx + 1}</span>
+                        </div>
+                        <div class="flex-grow">
+                            <div class="text-[10px] font-bold text-gray-400 group-hover:text-green-700">🐎 ${opt.horse}</div>
+                            <div class="font-keiba text-lg sm:text-xl text-gray-900">${opt.label}</div>
+                        </div>
+                    `;
+                    choicesContainer.appendChild(btn);
+                });
+
+            } else if (qData.type === 'written') {
+                typeBadge.textContent = qData.rivalHorse ? `🔥 ライバル対決：${qData.rivalHorse}に勝て！` : "✍️ 筆記・単騎駆けレース";
+                typeBadge.className = qData.rivalHorse
+                    ? "text-xs font-bold px-2.5 py-0.5 rounded-full bg-red-600 text-white shadow animate-pulse"
+                    : "text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300";
+                instruction.innerHTML = qData.rivalHorse
+                    ? `<i class="fa-solid fa-fire text-red-600 mr-1.5"></i> 宿敵「${qData.rivalHorse}」が立ちはだかる！正解を入力して差し切れ！`
+                    : `<i class="fa-solid fa-pen-nib text-purple-700 mr-1.5"></i> 正解の文字を入力して、愛馬を出走させよう！`;
+                writtenBox.classList.remove('hidden');
+
+                const inputEl = document.getElementById('written-input');
+                const submitBtn = document.getElementById('written-submit-btn');
+                inputEl.value = '';
+                inputEl.disabled = false;
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50');
+                setTimeout(() => inputEl.focus(), 100);
+
+            } else {
+                typeBadge.textContent = "🐎 4頭立て4択レース";
+                typeBadge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300";
+                instruction.innerHTML = `<i class="fa-solid fa-horse-head text-green-700 mr-1.5"></i> 正解だと思う「馬（馬番）」をクリックして出走させよう！`;
+                choicesContainer.classList.remove('hidden');
+
+                // 選択肢をシャッフルし、新しい正解の馬番（0〜3）を割り当てる
+                const indexedChoices = qData.choices.map((text, idx) => ({
+                    text,
+                    isCorrect: idx === qData.answer
+                }));
+                for (let i = indexedChoices.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [indexedChoices[i], indexedChoices[j]] = [indexedChoices[j], indexedChoices[i]];
+                }
+                qData.shuffledAnswer = indexedChoices.findIndex(item => item.isCorrect);
+
+                indexedChoices.forEach((choiceObj, idx) => {
+                    const wakuClass = `waku-${idx + 1}`;
+                    const btn = document.createElement('button');
+                    btn.id = `horse-btn-${idx}`;
+                    btn.onclick = () => selectHorse(idx);
+                    btn.className = "bg-white hover:bg-yellow-50 border-2 border-gray-300 hover:border-green-600 p-3.5 rounded-xl shadow-sm flex items-center space-x-3 text-left transition transform active:scale-95 group";
+                    btn.innerHTML = `
+                        <div class="${wakuClass} w-10 h-10 rounded-lg flex flex-col items-center justify-center shrink-0 shadow">
+                            <span class="text-[9px] leading-none">馬番</span>
+                            <span class="font-keiba text-base leading-tight">${idx + 1}</span>
+                        </div>
+                        <div class="flex-grow">
+                            <div class="text-[10px] font-bold text-gray-400 group-hover:text-green-700 flex items-center">
+                                <span>🐎 ${shuffledNames[idx]}</span>
+                            </div>
+                            <div class="font-bold text-sm sm:text-base text-gray-900">${choiceObj.text}</div>
+                        </div>
+                        <div class="text-green-600 opacity-0 group-hover:opacity-100 transition">
+                            <i class="fa-solid fa-play"></i>
+                        </div>
+                    `;
+                    choicesContainer.appendChild(btn);
+                });
+            }
+        }
+
+        // 筆記問題の回答送信処理
+        function submitWrittenAnswer() {
+            if (isAnswered) return;
+            const inputEl = document.getElementById('written-input');
+            const rawVal = inputEl.value.trim();
+            if (!rawVal) {
+                showToast("答えを入力してから出走してください！");
+                return;
+            }
+
+            const qData = currentQuestions[stepIndex];
+            const normalizedInput = rawVal.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).toLowerCase();
+            const isCorrect = qData.acceptedAnswers.some(ans => ans.toLowerCase() === normalizedInput);
+
+            inputEl.disabled = true;
+            const submitBtn = document.getElementById('written-submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50');
+
+            const winningHorseIdx = isCorrect ? 0 : 1;
+            runThrillingRaceSequence(0, winningHorseIdx, isCorrect);
+        }
+
+        // 4択・〇×で馬を選んだときの処理
+        function selectHorse(selectedIdx) {
+            if (isAnswered) return;
+            const qData = currentQuestions[stepIndex];
+            const correctIdx = (qData.type === 'choice' && qData.shuffledAnswer !== undefined) ? qData.shuffledAnswer : qData.answer;
+            const isCorrect = (selectedIdx === correctIdx);
+
+            const btnCount = qData.type === 'ox' ? 2 : 4;
+            for (let i = 0; i < btnCount; i++) {
+                const btn = document.getElementById(`horse-btn-${i}`);
+                if (btn) {
+                    btn.disabled = true;
+                    btn.classList.remove('hover:bg-yellow-50', 'hover:border-green-600');
+                }
+            }
+
+            runThrillingRaceSequence(selectedIdx, correctIdx, isCorrect);
+        }
+
+        // ハラハラドキドキのデッドヒート演出＆結果発表（約3.6秒）
+        function runThrillingRaceSequence(playerHorseIdx, winningHorseIdx, isCorrect) {
+            isAnswered = true;
+            const qData = currentQuestions[stepIndex];
+            const rivalLabel = qData.rivalHorse ? qData.rivalHorse : `${winningHorseIdx + 1}番馬`;
+
+            const commBar = document.getElementById('live-commentary-bar');
+            const commText = document.getElementById('live-commentary-text');
+            commBar.classList.remove('hidden');
+            commText.textContent = qData.rivalHorse
+                ? `${playerHorseIdx + 1}番馬と王者${qData.rivalHorse}、譲らぬ先行争い！`
+                : `${playerHorseIdx + 1}番馬、好スタートから前を伺う！`;
+            playSound('gallop');
+
+            // ステップ1（0.2秒後）：中盤の競り合い
+            activeTimers.push(setTimeout(() => {
+                for (let i = 0; i < 4; i++) {
+                    const runner = document.getElementById(`runner-${i}`);
+                    if (!runner) continue;
+                    runner.style.transition = 'left 1.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    const midPos = 42 + Math.floor(Math.random() * 11);
+                    runner.style.left = `${midPos}%`;
+                }
+                commText.textContent = qData.rivalHorse
+                    ? `第4コーナー！${qData.rivalHorse}が先頭で直線へ！あなたの愛馬が並びかける！`
+                    : "第4コーナーをカーブ！4頭ほぼ横一線のデッドヒート！";
+                playSound('gallop');
+            }, 200));
+
+            // ステップ2（1.5秒後）：残り200m！最後の直線での攻防
+            activeTimers.push(setTimeout(() => {
+                for (let i = 0; i < 4; i++) {
+                    const runner = document.getElementById(`runner-${i}`);
+                    if (!runner) continue;
+                    runner.style.transition = 'left 1.2s ease-in-out';
+                    let preGoalPos = 64 + Math.floor(Math.random() * 7);
+                    if (i === playerHorseIdx) {
+                        preGoalPos = 71;
+                    } else if (i === winningHorseIdx && !isCorrect) {
+                        preGoalPos = 70;
+                    }
+                    runner.style.left = `${preGoalPos}%`;
+                }
+                commText.textContent = qData.rivalHorse
+                    ? `残り200m！${qData.rivalHorse}との壮絶な叩き合い！一歩も引かない！`
+                    : `残り200m！${playerHorseIdx + 1}番馬が抜け出した！外からライバルも猛追！`;
+                playSound('gallop');
+            }, 1500));
+
+            // ステップ3（2.7秒後）：運命のゴール板通過！
+            activeTimers.push(setTimeout(() => {
+                for (let i = 0; i < 4; i++) {
+                    const runner = document.getElementById(`runner-${i}`);
+                    if (!runner) continue;
+                    runner.style.transition = 'left 0.8s cubic-bezier(0.22, 1, 0.36, 1)';
+                    let finalPos = 68 + Math.floor(Math.random() * 8);
+
+                    if (i === winningHorseIdx) {
+                        finalPos = 83;
+                    } else if (i === playerHorseIdx && !isCorrect) {
+                        finalPos = 76;
+                    }
+                    horsePositions[i] = finalPos;
+                    runner.style.left = `${finalPos}%`;
+                }
+
+                if (isCorrect) {
+                    commText.textContent = qData.rivalHorse
+                        ? `ゴールイン！！王者${qData.rivalHorse}をハナ差撃破して1着！！`
+                        : `ゴールイン！！${playerHorseIdx + 1}番馬が後続を振り切り見事1着！`;
+                } else {
+                    commText.textContent = `ああっとゴール直前！${rivalLabel}が差し切って1着！`;
+                }
+            }, 2700));
+
+            // ステップ4（3.6秒後）：着順確定＆解説モーダル表示
+            activeTimers.push(setTimeout(() => {
+                for (let i = 0; i < 4; i++) {
+                    const runner = document.getElementById(`runner-${i}`);
+                    if (runner) runner.classList.remove('animate-gallop');
+                }
+                commBar.classList.add('hidden');
+
+                if (isCorrect) {
+                    correctCount++;
+                    playSound('win');
+                } else {
+                    playSound('lose');
+                }
+
+                const cls = RACE_CLASSES[currentClassIndex];
+                const isWorldRace = (cls.id === 'g1_world');
+
+                if (qData.type !== 'written') {
+                    const btnCount = qData.type === 'ox' ? 2 : 4;
+                    const correctIdx = (qData.type === 'choice' && qData.shuffledAnswer !== undefined) ? qData.shuffledAnswer : qData.answer;
+                    for (let i = 0; i < btnCount; i++) {
+                        const btn = document.getElementById(`horse-btn-${i}`);
+                        if (!btn) continue;
+                        if (i === correctIdx) {
+                            btn.classList.add('bg-red-50', 'border-red-500', 'ring-2', 'ring-red-400');
+                            btn.innerHTML += `<span class="bg-red-600 text-white font-keiba text-xs px-2 py-1 rounded shrink-0">1着馬</span>`;
+                        } else if (i === playerHorseIdx && !isCorrect) {
+                            btn.classList.add('bg-gray-100', 'border-gray-400', 'opacity-75');
+                            btn.innerHTML += `<span class="bg-gray-600 text-white font-bold text-xs px-2 py-1 rounded shrink-0">着外</span>`;
+                        } else {
+                            btn.classList.add('opacity-50');
+                        }
+                    }
+                }
+
+                const modal = document.getElementById('step-result-modal');
+                const rankBadge = document.getElementById('rank-badge');
+                const rankNumber = document.getElementById('rank-number');
+                const rankTitle = document.getElementById('rank-title');
+                const expText = document.getElementById('explanation-text');
+                const nextBtn = document.getElementById('next-question-btn');
+
+                if (isCorrect) {
+                    rankBadge.className = "w-20 h-20 rounded-full flex flex-col items-center justify-center font-keiba shadow-lg border-4 border-yellow-300 bg-red-600 text-white shrink-0";
+                    rankNumber.textContent = "1位";
+                    rankTitle.textContent = "🎉 ハナ差を制して1位（1着）ゴール！";
+                    rankTitle.className = "font-keiba text-xl sm:text-2xl text-yellow-400 mb-1";
+                } else if (isWorldRace) {
+                    // 世界農業知識記念は1問でも間違えたら即「18着（負け）」
+                    stopRaceCountdown();
+                    isInstant18thLose = true;
+                    rankBadge.className = "w-20 h-20 rounded-full flex flex-col items-center justify-center font-keiba shadow-lg border-4 border-red-400 bg-gray-800 text-red-400 shrink-0";
+                    rankNumber.textContent = "18着";
+                    rankTitle.textContent = "💥 痛恨の失速！18着（シンガリ負け）…";
+                    rankTitle.className = "font-keiba text-xl sm:text-2xl text-red-400 mb-1";
+                } else {
+                    const otherRank = Math.floor(Math.random() * 3) + 2;
+                    rankBadge.className = "w-20 h-20 rounded-full flex flex-col items-center justify-center font-keiba shadow-lg border-4 border-gray-400 bg-gray-700 text-gray-200 shrink-0";
+                    rankNumber.textContent = `${otherRank}位`;
+                    rankTitle.textContent = `💦 ゴール前で交わされ1位以外（${otherRank}着）…`;
+                    rankTitle.className = "font-keiba text-xl sm:text-2xl text-blue-300 mb-1";
+                }
+
+                if (qData.type === 'written') {
+                    expText.innerHTML = `<span class="inline-block bg-yellow-400 text-green-950 font-bold px-2 py-0.5 rounded text-xs mb-1">正解：${qData.displayAnswer}</span><br>${qData.exp}`;
+                } else {
+                    expText.textContent = qData.exp;
+                }
+
+                document.getElementById('race-score-display').textContent = `${correctCount}勝 ${stepIndex + 1 - correctCount}敗`;
+
+                if (isInstant18thLose) {
+                    nextBtn.innerHTML = `確定着順（18着）を見る <i class="fa-solid fa-flag-checkered ml-1"></i>`;
+                } else if (stepIndex < currentQuestions.length - 1) {
+                    nextBtn.innerHTML = `次のコーナーへ <i class="fa-solid fa-forward ml-1"></i>`;
+                } else {
+                    nextBtn.innerHTML = `確定着順を見る <i class="fa-solid fa-flag-checkered ml-1"></i>`;
+                }
+
+                modal.classList.remove('hidden');
+            }, 3600));
+        }
+
+        // 次の問題へ進む、または最終結果へ
+        function nextStep() {
+            if (isInstant18thLose) {
+                showFinalResult();
+                return;
+            }
+            stepIndex++;
+            if (stepIndex < currentQuestions.length) {
+                horsePositions = [4, 4, 4, 4];
+                renderQuestion();
+            } else {
+                showFinalResult();
+            }
+        }
+
+        // レース終了時の最終リザルト画面
+        function showFinalResult() {
+            stopRaceCountdown();
+            document.getElementById('race-screen').classList.add('hidden');
+            document.getElementById('final-result-screen').classList.remove('hidden');
+
+            const cls = RACE_CLASSES[currentClassIndex];
+            const isWorldRace = (cls.id === 'g1_world');
+            const isPerfectWin = (!isTimeOutLose && !isInstant18thLose && correctCount === currentQuestions.length);
+
+            // 世界農業知識記念は300秒以内に全10問正解のみ1着優勝
+            const isRaceWin = isWorldRace ? isPerfectWin : (correctCount >= 2);
+            const isG1Win = (isRaceWin && cls.id.startsWith('g1'));
+            const isSeasonalG1 = ['g1_spring', 'g1_summer', 'g1_autumn', 'g1_winter'].includes(cls.id);
+            const isOverseasG1 = ['g1_arc', 'g1_dubai', 'g1_hongkong'].includes(cls.id);
+
+            const wasDubaiUnlockedBefore = isDubaiUnlocked();
+            const wasHkUnlockedBefore = isHongKongUnlocked();
+            const wasArcUnlockedBefore = isArcUnlocked();
+            const wasWorldUnlockedBefore = isWorldUnlocked();
+            let perfectG1IdToSave = null;
+            if ((isSeasonalG1 || isOverseasG1 || isWorldRace) && isPerfectWin) {
+                perfectG1IdToSave = cls.id;
+            }
+
+            if (window.saveRaceResultToFirebase) {
+                window.saveRaceResultToFirebase(isRaceWin, isG1Win, perfectG1IdToSave);
+            }
+
+            // ホーム画面の解放表示を最新化
+            initHomeScreen();
+            const isDubaiUnlockedNow = isDubaiUnlocked();
+            const isHkUnlockedNow = isHongKongUnlocked();
+            const isArcUnlockedNow = isArcUnlocked();
+            const isWorldUnlockedNow = isWorldUnlocked();
+
+            const justUnlockedDubai = (!wasDubaiUnlockedBefore && isDubaiUnlockedNow);
+            const justUnlockedHk = (!wasHkUnlockedBefore && isHkUnlockedNow);
+            const justUnlockedArc = (!wasArcUnlockedBefore && isArcUnlockedNow);
+            const justUnlockedWorld = (!wasWorldUnlockedBefore && isWorldUnlockedNow);
+
+            document.getElementById('final-grade-label').textContent = `${cls.grade} ${cls.name} 結果`;
+            document.getElementById('final-score-display').textContent = `${correctCount} / ${currentQuestions.length} 問正解`;
+
+            const stepUpBtn = document.getElementById('step-up-btn');
+            stepUpBtn.classList.add('hidden');
+
+            if (isRaceWin) {
+                const iconMap = {
+                    'g1_world': '🌍👑🏆👑🌍',
+                    'g1_arc': '🇫🇷🏆👑',
+                    'g1_dubai': '🇦🇪🏆👑',
+                    'g1_hongkong': '🇭🇰🏆👑'
+                };
+                document.getElementById('final-trophy').textContent = iconMap[cls.id] || (cls.id.startsWith('g1') ? '👑🏆👑' : '🏆');
+                document.getElementById('final-headline').textContent = isPerfectWin ? "全問正解・完全1位優勝！！" : "総合1位優勝！おめでとう！";
+                document.getElementById('final-headline').className = "font-keiba text-2xl sm:text-4xl text-red-600 mb-2";
+                document.getElementById('final-rank-display').textContent = isPerfectWin ? "1位（完全制覇）" : "1位（優勝）";
+                document.getElementById('final-rank-display').className = "font-keiba text-3xl text-red-500";
+                
+                triggerConfetti();
+                playSound('win');
+
+                if (justUnlockedWorld) {
+                    document.getElementById('final-subtext').textContent = "👑 海外3大G1（ドバイターフ・香港ヴァーズ・農業凱旋門賞）をすべて完全制覇！！真の最終決戦「🌍 G1 世界農業知識記念（10問・300秒勝負）」が解放されました！";
+                    stepUpBtn.innerHTML = `🌍 世界農業知識記念へ出走する！ <i class="fa-solid fa-angles-right ml-1"></i>`;
+                    stepUpBtn.onclick = () => startSingleRace(RACE_CLASSES.length - 1);
+                    stepUpBtn.classList.remove('hidden');
+                    showToast("🌍 最終G1「世界農業知識記念」が解放されました！");
+                } else if (justUnlockedArc) {
+                    document.getElementById('final-subtext').textContent = "🎉 春夏秋冬の4大G1をすべて全問正解で完全制覇！世界最高峰「🇫🇷 G1 農業凱旋門賞」が解放されました！";
+                    stepUpBtn.innerHTML = `🇫🇷 農業凱旋門賞へ出走する！ <i class="fa-solid fa-angles-right ml-1"></i>`;
+                    const arcIdx = RACE_CLASSES.findIndex(c => c.id === 'g1_arc');
+                    stepUpBtn.onclick = () => startSingleRace(arcIdx);
+                    stepUpBtn.classList.remove('hidden');
+                    showToast("🇫🇷 伝説のレース「G1 農業凱旋門賞」が解放されました！");
+                } else if (justUnlockedDubai) {
+                    document.getElementById('final-subtext').textContent = "🌸🌻 春・夏のG1を両方とも完全制覇！加工・運搬の超難関「🇦🇪 G1 ドバイターフ」が解放されました！";
+                    stepUpBtn.innerHTML = `🇦🇪 ドバイターフへ出走する！ <i class="fa-solid fa-angles-right ml-1"></i>`;
+                    const dubaiIdx = RACE_CLASSES.findIndex(c => c.id === 'g1_dubai');
+                    stepUpBtn.onclick = () => startSingleRace(dubaiIdx);
+                    stepUpBtn.classList.remove('hidden');
+                    showToast("🇦🇪 海外G1「ドバイターフ」が解放されました！");
+                } else if (justUnlockedHk) {
+                    document.getElementById('final-subtext').textContent = "🍁❄️ 秋・冬のG1を両方とも完全制覇！果樹の超難関「🇭🇰 G1 香港ヴァーズ」が解放されました！";
+                    stepUpBtn.innerHTML = `🇭🇰 香港ヴァーズへ出走する！ <i class="fa-solid fa-angles-right ml-1"></i>`;
+                    const hkIdx = RACE_CLASSES.findIndex(c => c.id === 'g1_hongkong');
+                    stepUpBtn.onclick = () => startSingleRace(hkIdx);
+                    stepUpBtn.classList.remove('hidden');
+                    showToast("🇭🇰 海外G1「香港ヴァーズ」が解放されました！");
+                } else if (isWorldRace) {
+                    const clearTime = Math.max(1, 300 - remainingSeconds);
+                    if (window.saveWorldG1ClearTime) {
+                        window.saveWorldG1ClearTime(clearTime);
+                    }
+                    document.getElementById('final-subtext').textContent = `🌍✨ 偉業達成！！世界農業知識記念を${clearTime}秒で全10問パーフェクト制覇！あなたは地球史上最強の農業マスターです！！`;
+                } else if (currentMode === 'career' && currentClassIndex < RACE_CLASSES.length - 1) {
+                    const nextCls = RACE_CLASSES[currentClassIndex + 1];
+                    if (nextCls.isSecretDubai && !isDubaiUnlockedNow) {
+                        document.getElementById('final-subtext').textContent = "有馬記念を制覇！なお「🇦🇪 ドバイターフ」へ挑むにはG1・春とG1・夏を両方完全制覇する必要があります！";
+                    } else if (nextCls.isSecretHongKong && !isHkUnlockedNow) {
+                        document.getElementById('final-subtext').textContent = "ドバイターフを優勝！なお「🇭🇰 香港ヴァーズ」へ挑むにはG1・秋とG1・冬を両方完全制覇する必要があります！";
+                    } else if (nextCls.isSecretArc && !isArcUnlockedNow) {
+                        document.getElementById('final-subtext').textContent = "なお「🇫🇷 G1 農業凱旋門賞」へ挑むには春夏秋冬の4大G1をすべて全問正解（パーフェクト）する必要があります！";
+                    } else if (nextCls.isSecretWorld && !isWorldUnlockedNow) {
+                        document.getElementById('final-subtext').textContent = "なお最終決戦「🌍 G1 世界農業知識記念」へ挑むにはドバイターフ・香港ヴァーズ・農業凱旋門賞をすべて完全制覇する必要があります！";
+                    } else {
+                        document.getElementById('final-subtext').textContent = `見事レース制覇！次は「${nextCls.grade}（${nextCls.name}）」に出走します！`;
+                        stepUpBtn.innerHTML = `${nextCls.grade}（${nextCls.name}）へ進む！ <i class="fa-solid fa-angles-right ml-1"></i>`;
+                        stepUpBtn.onclick = () => proceedNextClass();
+                        stepUpBtn.classList.remove('hidden');
+                    }
+                } else if (isOverseasG1 && !isPerfectWin) {
+                    document.getElementById('final-subtext').textContent = `${cls.icon} ${cls.name}を優勝！1問も間違えずに全3問パーフェクト制覇すると「🌍 G1 世界農業知識記念」の解放条件を満たします！`;
+                } else if (isOverseasG1 && isPerfectWin) {
+                    document.getElementById('final-subtext').textContent = `${cls.icon} ${cls.name}を全問正解で完全制覇！ドバイターフ・香港ヴァーズ・農業凱旋門賞をすべて完全制覇すると世界農業知識記念が解放されます！`;
+                } else if (isSeasonalG1 && !isPerfectWin) {
+                    document.getElementById('final-subtext').textContent = `「${cls.name}」優勝！次は全3問パーフェクト正解で「完全制覇」を目指そう！（春・夏制覇でドバイ、秋・冬制覇で香港が解放）`;
+                } else if (isSeasonalG1 && isPerfectWin) {
+                    document.getElementById('final-subtext').textContent = `「${cls.name}」全問正解で完全制覇！ペアとなる季節のG1も完全制覇すると海外G1が解放されます！`;
+                } else {
+                    document.getElementById('final-subtext').textContent = "素晴らしい騎乗でした！さらに上の重賞・G1レースにも挑戦してみよう！";
+                }
+            } else if (isWorldRace && isTimeOutLose) {
+                // 300秒オーバーは2着（負け）
+                document.getElementById('final-trophy').textContent = '⏱🥈🐎';
+                document.getElementById('final-headline').textContent = "時間切れ…惜しくも2着（敗北）";
+                document.getElementById('final-headline').className = "font-keiba text-2xl sm:text-4xl text-blue-700 mb-2";
+                document.getElementById('final-rank-display').textContent = "2着（タイムオーバー）";
+                document.getElementById('final-rank-display').className = "font-keiba text-2xl text-blue-400";
+                document.getElementById('final-subtext').textContent = "300秒以内に10問すべて解ききれず、ゴール前でハナ差交わされ2着に敗れました…！再挑戦しよう！";
+            } else if (isWorldRace && isInstant18thLose) {
+                // 1問ミスで18着（負け）
+                document.getElementById('final-trophy').textContent = '💥🐎💨';
+                document.getElementById('final-headline').textContent = "1問不正解で失速…18着（敗北）";
+                document.getElementById('final-headline').className = "font-keiba text-2xl sm:text-4xl text-gray-800 mb-2";
+                document.getElementById('final-rank-display').textContent = "18着（シンガリ負け）";
+                document.getElementById('final-rank-display').className = "font-keiba text-2xl text-red-400";
+                document.getElementById('final-subtext').textContent = "世界農業知識記念では1問でも間違えると即18着（敗退）となります！知識を研ぎ澄ませて再挑戦しよう！";
+            } else {
+                const finalOtherRank = correctCount === 1 ? "3位（着外）" : "4位（着外）";
+                document.getElementById('final-trophy').textContent = '🐎💨';
+                document.getElementById('final-headline').textContent = "惜敗…1位以外（着外）";
+                document.getElementById('final-headline').className = "font-keiba text-2xl sm:text-4xl text-gray-800 mb-2";
+                document.getElementById('final-rank-display').textContent = finalOtherRank;
+                document.getElementById('final-rank-display').className = "font-keiba text-2xl text-blue-400";
+                document.getElementById('final-subtext').textContent = "2問以上1着ゴールするとレース優勝＆次のレースへ進めます。再挑戦しよう！";
+            }
+        }
+
+        // キャリアモードで次のクラスへ進む
+        function proceedNextClass() {
+            if (currentClassIndex < RACE_CLASSES.length - 1) {
+                currentClassIndex++;
+                setupRace();
+            }
+        }
+
+        // レース途中棄権
+        function quitRace() {
+            clearAllTimers();
+            stopRaceCountdown();
+            returnHome();
+            showToast("レースを棄権してパドックに戻りました");
+        }
+
+        // ホーム画面へ戻る
+        function returnHome() {
+            clearAllTimers();
+            stopRaceCountdown();
+            document.getElementById('race-screen').classList.add('hidden');
+            document.getElementById('final-result-screen').classList.add('hidden');
+            document.getElementById('home-screen').classList.remove('hidden');
+        }
+
+        // 優勝時の紙吹雪エフェクト
+        function triggerConfetti() {
+            const colors = ['#facc15', '#ef4444', '#22c55e', '#3b82f6', '#ffffff'];
+            for (let i = 0; i < 40; i++) {
+                const conf = document.createElement('div');
+                conf.className = 'confetti';
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                conf.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                document.body.appendChild(conf);
+                setTimeout(() => conf.remove(), 4000);
+            }
+        }
+
+        // ページ読み込み時にホーム画面を初期化（すでに読み込み済みの場合は即実行）
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', initHomeScreen);
+        } else {
+            initHomeScreen();
+        }
+    </script>
+</body>
+</html>
